@@ -7,6 +7,8 @@ const cron = require("node-cron");
 const twilio = require("twilio");
 const { createClient } = require("@supabase/supabase-js");
 
+const { runGoogleLeadEngine } = require("./googleLeads");
+
 // =========================
 // INIT
 // =========================
@@ -32,14 +34,17 @@ app.use(express.json());
 // HEALTH CHECK
 // =========================
 app.get("/", (req, res) => {
-  res.send("RoofFlow AI API is running 🚀");
+  res.send("RoofFlow AI SaaS Engine Running 🚀");
 });
 
-// =========================
-// STRIPE CHECKOUT
-// =========================
+
+// ======================================================
+// STRIPE CHECKOUT (TENANT CREATION FLOW)
+// ======================================================
 app.post("/api/create-checkout-session", async (req, res) => {
   try {
+    const email = req.body.email;
+
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       payment_method_types: ["card"],
@@ -48,7 +53,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
           price_data: {
             currency: "usd",
             product_data: {
-              name: "RoofFlow AI - Roofing Pipeline System",
+              name: "RoofFlow AI - Roofing Lead System",
             },
             unit_amount: 49700,
             recurring: { interval: "month" },
@@ -56,6 +61,9 @@ app.post("/api/create-checkout-session", async (req, res) => {
           quantity: 1,
         },
       ],
+      metadata: {
+        email,
+      },
       success_url: "https://yourdomain.com/success",
       cancel_url: "https://yourdomain.com/cancel",
     });
@@ -67,9 +75,10 @@ app.post("/api/create-checkout-session", async (req, res) => {
   }
 });
 
-// =========================
-// STRIPE WEBHOOK
-// =========================
+
+// ======================================================
+// STRIPE WEBHOOK → CREATE TENANT
+// ======================================================
 app.post(
   "/api/stripe-webhook",
   bodyParser.raw({ type: "application/json" }),
@@ -91,37 +100,37 @@ app.post(
 
     if (event.type === "checkout.session.completed") {
       const session = event.data.object;
-      const email = session.customer_details?.email;
+      const email = session.metadata?.email;
 
       console.log("💰 Payment success:", email);
 
-      if (email) {
-        const { data: existing } = await supabase
-          .from("users")
-          .select("*")
-          .eq("email", email)
-          .single();
+      if (!email) return res.json({ received: true });
 
-        if (existing) {
-          await supabase
-            .from("users")
-            .update({
-              status: "active",
-              plan: "growth",
-              updated_at: new Date().toISOString(),
-            })
-            .eq("email", email);
-        } else {
-          await supabase.from("users").insert([
-            {
-              email,
-              stripe_session_id: session.id,
-              status: "active",
-              plan: "growth",
-              created_at: new Date().toISOString(),
-            },
-          ]);
-        }
+      // Check existing tenant
+      const { data: existing } = await supabase
+        .from("tenants")
+        .select("*")
+        .eq("email", email)
+        .single();
+
+      if (existing) {
+        await supabase
+          .from("tenants")
+          .update({
+            status: "active",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("email", email);
+      } else {
+        await supabase.from("tenants").insert([
+          {
+            email,
+            stripe_customer_id: session.customer,
+            plan: "growth",
+            status: "active",
+            created_at: new Date().toISOString(),
+          },
+        ]);
       }
     }
 
@@ -129,66 +138,134 @@ app.post(
   }
 );
 
-// =========================
-// TWILIO LEAD SENDER
-// =========================
-async function sendLeadSMS(lead) {
+
+// ======================================================
+// SMS SYSTEM
+// ======================================================
+async function sendLeadSMS(tenant, lead) {
   try {
     await client.messages.create({
-      body: `🔥 New Roofing Lead:\n${lead.name}\n${lead.phone}\n${lead.address}`,
+      body: `🔥 New Lead\n${lead.name}\n${lead.phone}\n${lead.address}`,
       from: process.env.TWILIO_NUMBER,
       to: process.env.RECEIVER_NUMBER,
     });
 
-    console.log("📲 SMS sent:", lead.name);
+    console.log(`📲 SMS sent to ${tenant.email}`);
   } catch (err) {
     console.error("SMS error:", err.message);
   }
 }
 
-// =========================
-// HOT LEAD LOGGER (FIXED)
-// =========================
+
+// ======================================================
+// HOT LEAD LOGGER
+// ======================================================
 function logHotLead(lead) {
   console.log(`🔥 HOT LEAD | ${lead.name} | SCORE: ${lead.score}`);
 }
 
-// =========================
-// SAVE LEAD (CENTRAL FUNCTION)
-// =========================
-async function saveLead(lead) {
+
+// ======================================================
+// SAVE LEAD (TENANT-AWARE)
+// ======================================================
+async function saveLead(tenantId, lead) {
+  const { data: settings } = await supabase
+    .from("tenant_settings")
+    .select("*")
+    .eq("tenant_id", tenantId)
+    .single();
+
+  const minScore = settings?.max_lead_score || 60;
+
+  if (lead.score < minScore) return;
+
   const { data: existing } = await supabase
     .from("leads")
     .select("id")
     .eq("phone", lead.phone)
+    .eq("tenant_id", tenantId)
     .single();
 
   if (existing) return;
 
-  await supabase.from("leads").insert([lead]);
+  await supabase.from("leads").insert([
+    {
+      tenant_id: tenantId,
+      ...lead,
+    },
+  ]);
 
   logHotLead(lead);
 
   if (lead.score >= 80) {
-    await sendLeadSMS(lead);
+    const { data: tenant } = await supabase
+      .from("tenants")
+      .select("*")
+      .eq("id", tenantId)
+      .single();
+
+    await sendLeadSMS(tenant, lead);
   }
 }
 
-// =========================
-// CRON: GOOGLE LEAD ENGINE
-// =========================
-const { runGoogleLeadEngine } = require("./googleLeads");
 
+// ======================================================
+// RUN ENGINE FOR ONE TENANT
+// ======================================================
+async function runEngineForTenant(tenant) {
+  const settings = await supabase
+    .from("tenant_settings")
+    .select("*")
+    .eq("tenant_id", tenant.id)
+    .single();
+
+  if (!settings.data) return;
+
+  for (const city of settings.data.cities || []) {
+    for (const type of settings.data.job_types || []) {
+      const leads = await runGoogleLeadEngine(`${type} in ${city}`);
+
+      for (const lead of leads) {
+        const score =
+          (lead.rating || 0) * 20 +
+          (lead.reviews_count || 0) * 0.1;
+
+        await saveLead(tenant.id, {
+          name: lead.name,
+          phone: lead.phone,
+          address: lead.address,
+          category: type,
+          source: "google_maps",
+          score: Math.min(Math.floor(score), 100),
+        });
+      }
+    }
+  }
+}
+
+
+// ======================================================
+// CRON (MULTI-TENANT ENGINE)
+// ======================================================
 cron.schedule("0 */6 * * *", async () => {
-  console.log("🧠 Running Google Maps Lead Engine...");
-  await runGoogleLeadEngine(saveLead);
+  console.log("🧠 Running Multi-Tenant Lead Engine...");
+
+  const { data: tenants } = await supabase
+    .from("tenants")
+    .select("*")
+    .eq("status", "active");
+
+  for (const tenant of tenants || []) {
+    await runEngineForTenant(tenant);
+  }
 });
 
-// =========================
+
+// ======================================================
 // START SERVER
-// =========================
+// ======================================================
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🚀 SaaS Server running on port ${PORT}`);
 });
