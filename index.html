@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>RoofFlow AI | Automated Roofing Pipeline</title>
 
+<!-- SUPABASE -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 <style>
 body{
   margin:0;
@@ -58,7 +61,6 @@ p{color:#cbd5f5;line-height:1.5}
   font-weight:700;
 }
 
-/* LIVE FEED */
 .feed-item{
   background:rgba(255,255,255,0.04);
   padding:12px;
@@ -97,64 +99,71 @@ p{color:#cbd5f5;line-height:1.5}
 <div id="feed"></div>
 </section>
 
-<!-- RESULTS -->
-<section class="section">
-<h2>Proven Results</h2>
-<div class="grid">
-<div class="card"><h3>127+</h3><p>Leads Generated Last Month</p></div>
-<div class="card"><h3>$84K+</h3><p>Roofing Revenue Impact</p></div>
-<div class="card"><h3>&lt;5min</h3><p>Average Lead Delivery</p></div>
-</div>
-</section>
-
-<!-- DASHBOARD -->
-<section class="section">
-<h2>Your Dashboard Includes</h2>
-<div class="grid">
-<div class="card">Live Lead Feed</div>
-<div class="card">City Targeting Controls</div>
-<div class="card">AI Lead Scoring</div>
-<div class="card">Instant SMS Alerts</div>
-</div>
-</section>
-
-<!-- PRICING -->
-<section class="section">
-<h2>$497/month</h2>
-<p>Full automated roofing acquisition system. Cancel anytime.</p>
-<button class="btn" onclick="showStep()">Activate System</button>
-</section>
-
 </div>
 
 <script>
-// ===== SHOW FORM =====
+// =========================
+// SUPABASE INIT
+// =========================
+const supabaseUrl = "YOUR_SUPABASE_URL";
+const supabaseKey = "YOUR_SUPABASE_ANON_KEY";
+
+const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+// =========================
+// UI
+// =========================
 function showStep(){
   document.getElementById("stepSection").style.display = "block";
   window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
 }
 
-// ===== STRIPE PAYMENT LINK (FIXED - NO BACKEND NEEDED) =====
-function startCheckout(){
+// =========================
+// MAIN FUNCTION (SAVE + REDIRECT)
+// =========================
+async function startCheckout(){
   const city = document.getElementById("city").value;
   const type = document.getElementById("type").value;
 
-  // store intent (optional tracking)
+  // local cache
   localStorage.setItem("lead_city", city);
   localStorage.setItem("lead_type", type);
 
   // button UX
   const btn = document.querySelector("#stepSection .btn");
-  btn.innerText = "Redirecting...";
+  btn.innerText = "Saving Lead...";
   btn.disabled = true;
 
-  // redirect to Stripe Payment Link
+  // SAVE TO SUPABASE
+  const { error } = await supabase
+    .from("leads")
+    .insert([
+      {
+        city: city,
+        type: type,
+        created_at: new Date().toISOString()
+      }
+    ]);
+
+  if (error) {
+    console.error(error);
+    alert("Error saving lead");
+    btn.innerText = "Activate System";
+    btn.disabled = false;
+    return;
+  }
+
+  // redirect step
+  btn.innerText = "Redirecting...";
+
   setTimeout(() => {
     window.location.href = "https://buy.stripe.com/test_YOUR_LINK";
-  }, 600);
+  }, 700);
 }
 
-// ===== LIVE FEED =====
+// =========================
+// LIVE FEED (SIMULATION)
+// =========================
 const cities = ["Dallas", "Houston", "Calgary", "Toronto", "Phoenix"];
 const types = ["Roof Leak", "Storm Damage", "Inspection Request", "Roof Replacement"];
 
@@ -179,7 +188,6 @@ function addLead(){
   }
 }
 
-// init feed
 for(let i=0;i<4;i++) addLead();
 setInterval(addLead, 3500);
 </script>
