@@ -1,3 +1,12 @@
+const cron = require("node-cron");
+const { scrapeLeads } = require("./scraper");
+
+// run every 15 minutes
+cron.schedule("*/15 * * * *", async () => {
+  console.log("Running lead scraper...");
+  await scrapeLeads();
+});
+
 const express = require("express");
 const Stripe = require("stripe");
 const { createClient } = require("@supabase/supabase-js");
