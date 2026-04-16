@@ -50,7 +50,12 @@ app.post(
     } catch (err) {
       return res.status(400).send(`Webhook Error: ${err.message}`);
     }
+import twilio from "twilio";
 
+const twilioClient = twilio(
+  process.env.TWILIO_SID,
+  process.env.TWILIO_AUTH
+);
     // ========================
     // SUBSCRIPTION ACTIVATION
     // ========================
