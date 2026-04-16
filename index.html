@@ -1,11 +1,16 @@
 <script>
 const API_BASE = "https://YOUR-BACKEND.onrender.com";
+const API_KEY = "northsky_public_key"; // must match backend
+
+let isSubmitting = false;
 
 async function submitLead() {
-  const name = document.getElementById("h_name").value.trim();
-  const phone = document.getElementById("h_phone").value.trim();
-  const city = document.getElementById("h_city").value.trim();
-  const issue = document.getElementById("h_issue").value.trim();
+  if (isSubmitting) return;
+
+  const name = document.getElementById("h_name")?.value.trim();
+  const phone = document.getElementById("h_phone")?.value.trim();
+  const city = document.getElementById("h_city")?.value.trim();
+  const issue = document.getElementById("h_issue")?.value.trim();
   const status = document.getElementById("leadStatus");
 
   if (!name || !phone || !city) {
@@ -13,24 +18,28 @@ async function submitLead() {
     return;
   }
 
+  isSubmitting = true;
   status.innerText = "Submitting...";
 
   try {
     const res = await fetch(`${API_BASE}/api/new-lead`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": API_KEY
+      },
       body: JSON.stringify({ name, phone, city, issue })
     });
 
     const data = await res.json();
 
-    if (!res.ok) throw new Error(data.error || "Failed");
+    if (!res.ok) throw new Error(data.error);
 
-    status.innerText = "Success! Contractor will contact you.";
-
+    status.innerText = "✅ Lead submitted!";
   } catch (err) {
-    console.error(err);
     status.innerText = "Error submitting lead";
+  } finally {
+    isSubmitting = false;
   }
 }
 </script>
