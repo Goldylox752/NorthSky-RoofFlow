@@ -1,11 +1,4 @@
 
-
-
-
-
-
-
-
 async function dispatchLead(lead) {
   const { data: contractors } = await supabase
     .from("contractors")
