@@ -1,3 +1,35 @@
+
+
+
+
+app.post("/api/create-checkout", async (req, res) => {
+  const { email, tier } = req.body;
+
+  const prices = {
+    starter: "price_xxx1",
+    pro: "price_xxx2",
+    elite: "price_xxx3",
+  };
+
+  const session = await stripe.checkout.sessions.create({
+    mode: "subscription",
+    payment_method_types: ["card"],
+    customer_email: email,
+    line_items: [
+      {
+        price: prices[tier],
+        quantity: 1,
+      },
+    ],
+    success_url: "https://your-site.com/dashboard",
+    cancel_url: "https://your-site.com/pricing",
+  });
+
+  res.json({ url: session.url });
+});
+
+
+
 import express from "express";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
