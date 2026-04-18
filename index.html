@@ -28,7 +28,7 @@ nav{
 
 .hero{
   text-align:center;
-  padding:80px 20px 40px;
+  padding:60px 20px 20px;
   max-width:900px;
   margin:auto;
 }
@@ -36,9 +36,12 @@ nav{
 .hero h1{font-size:44px;margin-bottom:15px;}
 .hero p{opacity:0.75;margin-bottom:15px;}
 
-.trust{
-  font-size:14px;
-  opacity:0.7;
+.login-box{
+  max-width:400px;
+  margin:20px auto;
+  background:#111827;
+  padding:20px;
+  border-radius:12px;
 }
 
 .section{
@@ -73,21 +76,6 @@ button{
   cursor:pointer;
 }
 
-.plan.elite button{background:#22c55e;}
-
-ul{margin:10px 0 15px 0;padding-left:18px;opacity:0.9;}
-
-.hidden{display:none;}
-
-.form-box{
-  background:#111827;
-  padding:35px;
-  border-radius:14px;
-  max-width:520px;
-  margin:auto;
-  border:1px solid rgba(255,255,255,0.05);
-}
-
 input{
   width:100%;
   padding:12px;
@@ -98,10 +86,19 @@ input{
   color:#fff;
 }
 
+.hidden{display:none;}
+
+.form-box{
+  background:#111827;
+  padding:35px;
+  border-radius:14px;
+  max-width:520px;
+  margin:auto;
+}
+
 .small{
   font-size:12px;
   opacity:0.6;
-  margin-top:10px;
 }
 </style>
 </head>
@@ -116,76 +113,48 @@ input{
 <section class="hero">
   <h1>Turn Roof Inspections Into $1K–$5K Jobs</h1>
   <p>AI-powered leads + drone system built for contractors</p>
-
-  <div class="trust">
-    ✔ Exclusive Territories  
-    ✔ Real Job Opportunities  
-    ✔ Built for Fast Closings
-  </div>
 </section>
 
-<!-- VALUE -->
-<section class="section">
-  <h2>How It Works</h2>
-  <p>1. Lock your territory</p>
-  <p>2. Receive AI-generated roofing leads</p>
-  <p>3. Close jobs using drone inspections</p>
-</section>
+<!-- 🔐 LOGIN -->
+<div class="login-box">
+  <input type="email" id="loginEmail" placeholder="Enter your email">
+  <button onclick="login()">Login / Access Dashboard</button>
+  <p class="small">Use the same email you used at checkout</p>
+</div>
 
 <!-- 🔒 PAYWALL -->
 <section id="paywall" class="section paywall">
 
   <h2>Unlock Your Territory</h2>
-  <p>Select your access level</p>
 
-  <!-- STARTER -->
   <div class="plan">
     <h3>Starter</h3>
     <div class="price">$99</div>
-    <ul>
-      <li>✔ Basic AI Leads</li>
-      <li>✔ Limited Access</li>
-    </ul>
     <a href="https://buy.stripe.com/dRmfZae1d2eoeofgLK2ZO0C?success_url=https://YOURDOMAIN.com/success.html">
       <button>Get Started</button>
     </a>
   </div>
 
-  <!-- PRO -->
   <div class="plan pro">
     <h3>Pro Territory</h3>
     <div class="price">$299</div>
-    <ul>
-      <li>✔ Priority AI Leads</li>
-      <li>✔ Faster Closings</li>
-      <li>✔ Automation System</li>
-    </ul>
     <a href="https://buy.stripe.com/dRm28k8GTaKU1Btcvu2ZO0D?success_url=https://YOURDOMAIN.com/success.html">
       <button>Upgrade to Pro</button>
     </a>
   </div>
 
-  <!-- ELITE -->
   <div class="plan elite">
     <h3>Elite Territory</h3>
     <div class="price">$999</div>
-    <ul>
-      <li>✔ Full City Exclusivity</li>
-      <li>✔ Premium Leads</li>
-      <li>✔ Territory Lock</li>
-    </ul>
     <a href="https://buy.stripe.com/aFaeV6cX97yIfsjcvu2ZO0E?success_url=https://YOURDOMAIN.com/success.html">
       <button>Unlock Elite</button>
     </a>
   </div>
 
-  <p class="small">Secure checkout powered by Stripe</p>
-
 </section>
 
 <!-- 🔓 APP -->
 <section id="app" class="section hidden">
-
   <div class="form-box">
     <h2>Lock Your Territory</h2>
 
@@ -194,19 +163,61 @@ input{
     <input type="text" id="city" placeholder="City / Region">
 
     <button onclick="submitLead()">Check Availability</button>
-
     <div id="status"></div>
   </div>
-
 </section>
 
 <script>
 
-/* ================= SUPABASE ================= */
+/* ================= INIT ================= */
 const supabase = window.supabase.createClient(
   "YOUR_SUPABASE_URL",
   "YOUR_SUPABASE_ANON_KEY"
 );
+
+let currentUser = null;
+
+/* ================= LOGIN ================= */
+async function login(){
+
+  const email = document.getElementById("loginEmail").value;
+
+  if(!email){
+    alert("Enter email");
+    return;
+  }
+
+  const { error } = await supabase.auth.signInWithOtp({ email });
+
+  if(error){
+    alert("Login failed");
+    return;
+  }
+
+  alert("Check your email for login link");
+}
+
+/* ================= AUTH CHECK ================= */
+window.onload = async function(){
+
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if(!user) return;
+
+  currentUser = user;
+
+  const { data } = await supabase
+    .from("users")
+    .select("paid, plan")
+    .eq("email", user.email)
+    .single();
+
+  if(!data || !data.paid) return;
+
+  // unlock
+  document.getElementById("paywall").style.display = "none";
+  document.getElementById("app").classList.remove("hidden");
+};
 
 /* ================= SESSION ================= */
 function getSessionId(){
@@ -218,16 +229,13 @@ function getSessionId(){
   return id;
 }
 
-/* ================= ACCESS CONTROL ================= */
-window.onload = function(){
-  if(localStorage.getItem("paid_access") === "true"){
-    document.getElementById("paywall").style.display = "none";
-    document.getElementById("app").classList.remove("hidden");
-  }
-};
-
-/* ================= LEAD SUBMIT ================= */
+/* ================= LEAD ================= */
 async function submitLead(){
+
+  if(!currentUser){
+    alert("Login required");
+    return;
+  }
 
   const name = document.getElementById("name").value;
   const email = document.getElementById("email").value;
@@ -239,14 +247,14 @@ async function submitLead(){
     return;
   }
 
-  status.innerText = "Checking territory...";
+  status.innerText = "Saving...";
 
   const { error } = await supabase.from("leads").insert([{
     name,
     email,
     city,
-    session_id: getSessionId(),
-    source: "roofflow_paid"
+    user_email: currentUser.email,
+    session_id: getSessionId()
   }]);
 
   if(error){
@@ -254,11 +262,11 @@ async function submitLead(){
     return;
   }
 
-  status.innerText = "Territory reserved — redirecting...";
+  status.innerText = "Success — redirecting...";
 
   setTimeout(() => {
     window.location.href = "https://northsky-drones.vercel.app?bundle=inspection-kit";
-  }, 1200);
+  }, 1000);
 }
 
 </script>
