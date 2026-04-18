@@ -1,6 +1,6 @@
 /* =========================================
-   NORTHSKY AI - MINIMAL WORKING ENGINE
-   index.js (SAFE + EXECUTES IN BROWSER)
+   NORTHSKY AI - SECURE ENGINE
+   index.js (AUTH + PAYMENT VERIFIED)
 ========================================= */
 
 /* ========== CONFIG ========== */
@@ -11,30 +11,63 @@ const CONFIG = {
 };
 
 let supabase = null;
+let currentUser = null;
 
 /* ========== INIT ========== */
-(function init() {
+(async function init() {
 
-  // wait until supabase script exists
-  if (window.supabase) {
-    supabase = window.supabase.createClient(
-      CONFIG.SUPABASE_URL,
-      CONFIG.SUPABASE_KEY
-    );
-    console.log("✅ Supabase connected");
-  } else {
-    console.warn("⚠️ Supabase not loaded");
+  if (!window.supabase) {
+    console.error("❌ Supabase not loaded");
+    return;
   }
 
-  // expose functions globally (THIS is what fixes “not committing”)
-  window.unlockAccess = unlockAccess;
+  supabase = window.supabase.createClient(
+    CONFIG.SUPABASE_URL,
+    CONFIG.SUPABASE_KEY
+  );
+
+  console.log("✅ Supabase connected");
+
+  // check auth session
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    console.log("🔒 No user session");
+    return; // user not logged in
+  }
+
+  currentUser = user;
+
+  console.log("👤 Logged in:", user.email);
+
+  // verify paid access
+  const { data, error } = await supabase
+    .from("users")
+    .select("paid, plan")
+    .eq("email", user.email)
+    .single();
+
+  if (error || !data || !data.paid) {
+    console.warn("🚫 No paid access");
+    return;
+  }
+
+  console.log("🔓 Paid access confirmed:", data.plan);
+
+  // unlock UI
+  const paywall = document.getElementById("paywall");
+  const app = document.getElementById("app");
+
+  if (paywall) paywall.style.display = "none";
+  if (app) app.classList.remove("hidden");
+
+  // expose submit only AFTER auth
   window.submitLead = submitLead;
 
-  console.log("🚀 Index.js running");
 })();
+    
 
-
-/* ========== SESSION ========== */
+/* ========== SESSION (OPTIONAL TRACKING) ========== */
 function sessionId() {
   let id = localStorage.getItem("session_id");
 
@@ -47,39 +80,50 @@ function sessionId() {
 }
 
 
-/* ========== PAYWALL ========== */
-function isPaid() {
-  return localStorage.getItem("paid_access") === "true";
+/* ========== LOGIN (MAGIC LINK) ========== */
+async function login(email) {
+
+  if (!email) {
+    alert("Enter email");
+    return;
+  }
+
+  const { error } = await supabase.auth.signInWithOtp({
+    email: email
+  });
+
+  if (error) {
+    alert("Login failed");
+    console.error(error);
+    return;
+  }
+
+  alert("Check your email for login link");
 }
 
-function unlockAccess() {
-  localStorage.setItem("paid_access", "true");
-
-  const paywall = document.getElementById("paywall");
-  const app = document.getElementById("app");
-
-  if (paywall) paywall.style.display = "none";
-  if (app) app.classList.remove("hidden");
-
-  console.log("🔓 Access unlocked");
-}
+window.login = login;
 
 
-/* ========== LEAD SUBMIT (FIXED DOM HOOKS) ========== */
+/* ========== LEAD SUBMIT (SECURE) ========== */
 async function submitLead() {
+
+  if (!currentUser) {
+    alert("You must be logged in");
+    return;
+  }
 
   const nameEl = document.getElementById("name");
   const emailEl = document.getElementById("email");
   const cityEl = document.getElementById("city");
 
   if (!nameEl || !emailEl || !cityEl) {
-    alert("Missing form fields in HTML");
+    alert("Missing form fields");
     return;
   }
 
-  const name = nameEl.value;
-  const email = emailEl.value;
-  const city = cityEl.value;
+  const name = nameEl.value.trim();
+  const email = emailEl.value.trim();
+  const city = cityEl.value.trim();
 
   if (!name || !email || !city) {
     alert("Fill all fields");
@@ -90,34 +134,25 @@ async function submitLead() {
     name,
     email,
     city,
+    user_email: currentUser.email,
     session_id: sessionId(),
     created_at: new Date().toISOString()
   };
 
   console.log("📩 Lead captured", payload);
 
-  // save to supabase (if connected)
-  if (supabase) {
-    await supabase.from("leads").insert([payload]);
+  const { error } = await supabase.from("leads").insert([payload]);
+
+  if (error) {
+    console.error("❌ Insert failed", error);
+    alert("Error submitting. Try again.");
+    return;
   }
 
-  // redirect
+  console.log("✅ Lead saved");
+
+  // redirect to drone upsell
   setTimeout(() => {
-    window.location.href = CONFIG.DRONE_URL;
-  }, 600);
+    window.location.href = CONFIG.DRONE_URL + "?bundle=inspection-kit";
+  }, 800);
 }
-
-
-/* ========== AUTO CHECK ON LOAD ========== */
-window.addEventListener("load", () => {
-
-  console.log("📦 index.js loaded");
-
-  if (isPaid()) {
-    const paywall = document.getElementById("paywall");
-    const app = document.getElementById("app");
-
-    if (paywall) paywall.style.display = "none";
-    if (app) app.classList.remove("hidden");
-  }
-});
