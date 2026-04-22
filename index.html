@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>NorthSky AI | Roofing Intelligence Platform</title>
+  <title>NorthSky AI 2026 | Roofing Intelligence Platform</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
@@ -21,7 +21,6 @@
       line-height: 1.5;
     }
 
-    /* glass morphism components */
     .glass-card {
       background: rgba(15, 23, 42, 0.7);
       backdrop-filter: blur(14px);
@@ -36,7 +35,6 @@
       padding: 0 1.5rem;
     }
 
-    /* navigation */
     nav {
       display: flex;
       justify-content: space-between;
@@ -80,7 +78,6 @@
       border-color: #ef4444;
     }
 
-    /* hero */
     .hero {
       text-align: center;
       padding: 3rem 1rem 2rem;
@@ -100,7 +97,6 @@
       margin: 1rem auto 0;
     }
 
-    /* auth panel */
     .auth-panel {
       max-width: 460px;
       margin: 2rem auto;
@@ -164,7 +160,6 @@
       color: #4ade80;
     }
 
-    /* paywall plans */
     .plans-grid {
       display: flex;
       flex-wrap: wrap;
@@ -214,7 +209,6 @@
       display: block;
     }
 
-    /* app dashboard */
     .dashboard {
       max-width: 700px;
       margin: 2rem auto;
@@ -253,6 +247,28 @@
       margin-right: 6px;
     }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    /* modal */
+    .modal {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.8);
+      backdrop-filter: blur(10px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    .modal-card {
+      background: #0f172a;
+      border-radius: 2rem;
+      max-width: 450px;
+      width: 90%;
+      padding: 2rem;
+      text-align: center;
+      border: 1px solid #4f46e5;
+    }
     footer {
       text-align: center;
       padding: 2rem;
@@ -269,7 +285,7 @@
 
 <div class="container">
   <nav>
-    <div class="logo">⛅ NorthSky AI</div>
+    <div class="logo">⛅ NorthSky AI 2026</div>
     <div id="navUserArea"></div>
   </nav>
 
@@ -278,7 +294,7 @@
     <p>AI‑powered leads + drone intelligence · exclusive territories for certified contractors</p>
   </div>
 
-  <!-- 🔐 LOGIN / AUTH SECTION -->
+  <!-- LOGIN SECTION -->
   <div id="authSection" class="auth-panel">
     <h3 style="margin-bottom: 1rem; text-align: center;">🔑 Access your territory hub</h3>
     <div class="input-group">
@@ -289,11 +305,10 @@
     <div class="small-text">✨ Use the same email you used for purchase. A secure login link will be sent.</div>
   </div>
 
-  <!-- 💰 PAYWALL (subscription plans) with UPDATED STRIPE LINKS -->
+  <!-- PAYWALL with FIXED buy links (mock checkout) -->
   <div id="paywallSection" class="hidden" style="margin: 2rem 0;">
     <h2 style="text-align: center;">🚀 Unlock your territory license</h2>
     <div class="plans-grid">
-      <!-- Starter plan - $99/month -->
       <div class="plan-card">
         <div class="plan-title">Starter</div>
         <div class="plan-price">$99 <span style="font-size: 0.9rem;">/ month</span></div>
@@ -302,11 +317,8 @@
           <li>✓ Basic AI reports</li>
           <li>✓ Email support</li>
         </ul>
-        <a href="https://buy.stripe.com/dRmfZae1d2eoeofgLK2ZO0C" target="_blank" class="stripe-link" data-plan="starter">
-          <button>Get Starter</button>
-        </a>
+        <button class="buy-now-btn" data-plan="starter">Get Starter →</button>
       </div>
-      <!-- Pro territory - $299/month -->
       <div class="plan-card pro">
         <div class="plan-title">Pro Territory</div>
         <div class="plan-price">$299 <span style="font-size: 0.9rem;">/ month</span></div>
@@ -316,11 +328,8 @@
           <li>✓ Priority lead scoring</li>
           <li>✓ Territory lock (radius)</li>
         </ul>
-        <a href="https://buy.stripe.com/dRm28k8GTaKU1Btcvu2ZO0D" target="_blank" class="stripe-link" data-plan="pro">
-          <button>Upgrade to Pro</button>
-        </a>
+        <button class="buy-now-btn" data-plan="pro">Upgrade to Pro →</button>
       </div>
-      <!-- Elite territory - $999/month -->
       <div class="plan-card elite">
         <div class="plan-title">Elite Territory</div>
         <div class="plan-price">$999 <span style="font-size: 0.9rem;">/ month</span></div>
@@ -330,13 +339,11 @@
           <li>✓ Dedicated account manager</li>
           <li>✓ Exclusive regional monopoly</li>
         </ul>
-        <a href="https://buy.stripe.com/aFaeV6cX97yIfsjcvu2ZO0E" target="_blank" class="stripe-link" data-plan="elite">
-          <button>Unlock Elite</button>
-        </a>
+        <button class="buy-now-btn" data-plan="elite">Unlock Elite →</button>
       </div>
     </div>
     <div class="small-text" style="text-align: center; margin-top: 1rem;">
-      ⚡ After payment, click <strong>"Verify payment & refresh"</strong> below (or the link in your email will auto-upgrade).
+      ⚡ After payment, your subscription will be activated automatically.
     </div>
     <div style="display: flex; justify-content: center; margin-top: 0.5rem;">
       <button id="manualRefreshPlanBtn" class="refresh-sub" style="width: auto; padding: 0.6rem 1.5rem;">⟳ Refresh subscription status</button>
@@ -344,7 +351,7 @@
     <div id="paywallMessage" class="small-text" style="text-align: center; margin-top: 0.5rem;"></div>
   </div>
 
-  <!-- 🧠 MAIN APP (locked territory system) -->
+  <!-- MAIN APP (territory locking) -->
   <div id="appSection" class="dashboard glass-card hidden">
     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
       <h2>🏆 Lock Your Territory</h2>
@@ -379,9 +386,7 @@
   const SUPABASE_URL = "YOUR_SUPABASE_URL";        // e.g. "https://xxxxx.supabase.co"
   const SUPABASE_ANON_KEY = "YOUR_SUPABASE_ANON_KEY";
 
-  // Detect if keys are still placeholders
   const isSupabaseConfigured = SUPABASE_URL !== "YOUR_SUPABASE_URL" && SUPABASE_ANON_KEY !== "YOUR_SUPABASE_ANON_KEY";
-
   let supabase;
   if (isSupabaseConfigured) {
     supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -390,8 +395,8 @@
   }
 
   // Global state
-  let currentSession = null;     // supabase user object
-  let currentPlan = null;        // 'starter', 'pro', 'elite'
+  let currentSession = null;
+  let currentPlan = null;
   let isPaid = false;
 
   // DOM elements
@@ -404,41 +409,157 @@
   const leadStatusDiv = document.getElementById("leadStatus");
   const planBadgeSpan = document.getElementById("planBadge");
 
-  // Helper: update UI based on login + subscription status
+  // ---------- MOCK CHECKOUT (FIXED BUY LINKS) ----------
+  function showMockPurchase(planName) {
+    const modalDiv = document.createElement('div');
+    modalDiv.className = 'modal';
+    modalDiv.innerHTML = `
+      <div class="modal-card">
+        <i class="fas fa-credit-card" style="font-size: 3rem; color:#4f46e5;"></i>
+        <h2 style="margin:1rem 0">Secure Checkout 2026</h2>
+        <p>Plan: <strong>${planName}</strong><br>Price: ${planName === 'starter' ? '$99' : (planName === 'pro' ? '$299' : '$999')}/month</p>
+        <div style="background:#1e293b; padding:1rem; border-radius:1rem; margin:1rem 0;">
+          <i class="fas fa-lock"></i> Demo payment gateway (simulated)
+        </div>
+        <button id="mockPayBtn" class="buy-now-btn" style="width:auto; margin:0.5rem">Complete Payment →</button>
+        <button id="closeModalBtn" class="refresh-sub" style="background:#475569; margin-top:0.5rem;">Cancel</button>
+      </div>
+    `;
+    document.body.appendChild(modalDiv);
+
+    document.getElementById('mockPayBtn').addEventListener('click', async () => {
+      // Simulate successful payment
+      modalDiv.remove();
+      paywallMessageDiv.innerHTML = "⏳ Processing payment & activating license...";
+      
+      // Update subscription in database or demo
+      await activateSubscription(planName);
+      
+      paywallMessageDiv.innerHTML = "✅ Subscription activated! Redirecting to dashboard...";
+      setTimeout(() => refreshUIAfterAuth(), 1000);
+    });
+    document.getElementById('closeModalBtn').addEventListener('click', () => modalDiv.remove());
+  }
+
+  async function activateSubscription(plan) {
+    if (!currentSession) {
+      // Not logged in: store in localStorage for demo, but require login first
+      alert("Please login first (or use Demo Access) before purchasing.");
+      return;
+    }
+    
+    if (supabase && isSupabaseConfigured) {
+      // Update Supabase users table
+      const { error } = await supabase
+        .from("users")
+        .upsert({ email: currentSession.email, paid: true, plan: plan }, { onConflict: "email" });
+      if (error) {
+        console.error("Supabase update error:", error);
+        // Fallback to localStorage
+        localStorage.setItem("ns_demo_subscription", JSON.stringify({ email: currentSession.email, plan, paid: true }));
+      } else {
+        console.log("Subscription saved to Supabase");
+      }
+    } else {
+      // Demo mode: store in localStorage
+      localStorage.setItem("ns_demo_subscription", JSON.stringify({ email: currentSession.email, plan, paid: true }));
+    }
+    
+    // Refresh local state
+    await fetchUserSubscription();
+  }
+
+  // ---------- AUTH & SUBSCRIPTION ----------
+  async function fetchUserSubscription() {
+    if (!currentSession) {
+      isPaid = false;
+      currentPlan = null;
+      return;
+    }
+    
+    // Check demo/localStorage first (for non-Supabase or fallback)
+    const demoSub = localStorage.getItem("ns_demo_subscription");
+    if (demoSub && !isSupabaseConfigured) {
+      try {
+        const sub = JSON.parse(demoSub);
+        if (sub.email === currentSession.email && sub.paid) {
+          isPaid = true;
+          currentPlan = sub.plan;
+          return;
+        }
+      } catch(e) {}
+    }
+    
+    if (!supabase || !isSupabaseConfigured) {
+      isPaid = false;
+      currentPlan = null;
+      return;
+    }
+    
+    try {
+      const { data, error } = await supabase
+        .from("users")
+        .select("paid, plan")
+        .eq("email", currentSession.email)
+        .maybeSingle();
+        
+      if (error && error.code !== "PGRST116") {
+        console.error("DB fetch error:", error);
+        isPaid = false;
+        return;
+      }
+      if (data) {
+        isPaid = !!data.paid;
+        currentPlan = data.plan || null;
+      } else {
+        // Create user record
+        await supabase.from("users").insert([{ email: currentSession.email, paid: false, plan: null }]);
+        isPaid = false;
+        currentPlan = null;
+      }
+    } catch (err) {
+      console.warn("Subscription check failed", err);
+      isPaid = false;
+    }
+  }
+
   async function refreshUIAfterAuth() {
     if (!currentSession) {
-      // not logged in
       authSection.classList.remove("hidden");
       paywallSection.classList.add("hidden");
       appSection.classList.add("hidden");
       renderNavLoggedOut();
       return;
     }
-
-    // user logged in: fetch subscription from DB
+    
     await fetchUserSubscription();
-
+    
     if (isPaid && currentPlan) {
-      // fully active: show main app
       authSection.classList.add("hidden");
       paywallSection.classList.add("hidden");
       appSection.classList.remove("hidden");
       renderNavLoggedIn();
       updatePlanBadge();
     } else {
-      // logged in but no active plan: show paywall + upgrade options
       authSection.classList.add("hidden");
       paywallSection.classList.remove("hidden");
       appSection.classList.add("hidden");
       renderNavLoggedIn();
-      paywallMessageDiv.innerHTML = "⚠️ No active subscription. Choose a plan below or refresh after payment.";
+      paywallMessageDiv.innerHTML = "⚠️ No active subscription. Choose a plan below to unlock the dashboard.";
     }
   }
-
+  
+  function updatePlanBadge() {
+    if (!currentPlan) planBadgeSpan.innerText = "⚡ No active license";
+    else if (currentPlan === "pro") planBadgeSpan.innerText = "🏅 PRO TERRITORY ACTIVE";
+    else if (currentPlan === "elite") planBadgeSpan.innerText = "👑 ELITE TERRITORY · UNLIMITED";
+    else planBadgeSpan.innerText = "🌱 STARTER PLAN";
+  }
+  
   function renderNavLoggedOut() {
     navUserArea.innerHTML = `<div class="user-info">🔓 Not logged in</div>`;
   }
-
+  
   function renderNavLoggedIn() {
     if (!currentSession) return;
     const emailShort = currentSession.email?.split('@')[0] || "user";
@@ -450,56 +571,16 @@
     `;
     document.getElementById("logoutBtn")?.addEventListener("click", async () => {
       if (supabase) await supabase.auth.signOut();
-      localStorage.removeItem("ns_territory_session");
+      localStorage.removeItem("ns_demo_subscription");
       currentSession = null;
       isPaid = false;
       currentPlan = null;
       refreshUIAfterAuth();
     });
   }
-
-  async function fetchUserSubscription() {
-    if (!supabase || !currentSession) return;
-    try {
-      const { data, error } = await supabase
-        .from("users")
-        .select("paid, plan")
-        .eq("email", currentSession.email)
-        .maybeSingle();
-
-      if (error && error.code !== "PGRST116") {
-        console.error("DB fetch error:", error);
-        isPaid = false;
-        return;
-      }
-      if (data) {
-        isPaid = !!data.paid;
-        currentPlan = data.plan || null;
-      } else {
-        // User not found in 'users' table: create a default unpaid record
-        const { error: insertError } = await supabase
-          .from("users")
-          .insert([{ email: currentSession.email, paid: false, plan: null }]);
-        if (insertError && insertError.code !== "23505") console.warn(insertError);
-        isPaid = false;
-        currentPlan = null;
-      }
-    } catch (err) {
-      console.warn("Subscription check failed", err);
-      isPaid = false;
-    }
-  }
-
-  function updatePlanBadge() {
-    if (!currentPlan) planBadgeSpan.innerText = "⚡ No active license";
-    else if (currentPlan === "pro") planBadgeSpan.innerText = "🏅 PRO TERRITORY ACTIVE";
-    else if (currentPlan === "elite") planBadgeSpan.innerText = "👑 ELITE TERRITORY · UNLIMITED";
-    else planBadgeSpan.innerText = "🌱 STARTER PLAN";
-  }
-
-  // Manual refresh (after Stripe payment)
+  
   async function manualRefreshSubscription() {
-    if (!supabase || !currentSession) {
+    if (!currentSession) {
       if (paywallMessageDiv) paywallMessageDiv.innerText = "Please login first.";
       return;
     }
@@ -509,10 +590,10 @@
       paywallMessageDiv.innerHTML = "✅ Subscription active! Redirecting to dashboard...";
       setTimeout(() => refreshUIAfterAuth(), 800);
     } else {
-      paywallMessageDiv.innerHTML = "❌ No active plan yet. Complete payment or check email for confirmation.";
+      paywallMessageDiv.innerHTML = "❌ No active plan yet. Complete payment using the buttons above.";
     }
   }
-
+  
   // Magic link login
   async function sendMagicLink() {
     const emailInput = document.getElementById("loginEmail");
@@ -522,7 +603,7 @@
       return;
     }
     if (!supabase) {
-      authMessageDiv.innerHTML = "<span class='error-msg'>Supabase not configured. Add credentials to enable auth.</span>";
+      authMessageDiv.innerHTML = "<span class='error-msg'>Supabase not configured. Use 'Demo Access' button below.</span>";
       return;
     }
     authMessageDiv.innerHTML = "<span>Sending magic link... <div class='loader' style='vertical-align:middle'></div></span>";
@@ -536,7 +617,7 @@
       authMessageDiv.innerHTML = "<span class='success-msg'>✨ Magic link sent! Check your inbox (spam too).</span>";
     }
   }
-
+  
   // Lead submission (territory lock)
   async function submitLead() {
     if (!currentSession) {
@@ -555,15 +636,14 @@
       return;
     }
     leadStatusDiv.innerHTML = "<span>Reserving territory... <div class='loader'></div></span>";
-    // generate session ID for analytics
     let sessionId = localStorage.getItem("ns_territory_session");
     if (!sessionId) {
       sessionId = crypto.randomUUID();
       localStorage.setItem("ns_territory_session", sessionId);
     }
-    // if supabase not configured: demo mode (store locally)
-    if (!supabase) {
-      // demo fallback
+    
+    if (!supabase || !isSupabaseConfigured) {
+      // Demo mode
       const lead = { name, email, city, user_email: currentSession.email, session_id: sessionId, timestamp: new Date().toISOString() };
       let demoLeads = JSON.parse(localStorage.getItem("demo_leads") || "[]");
       demoLeads.push(lead);
@@ -574,11 +654,9 @@
       }, 1200);
       return;
     }
-    // real supabase insert
+    
     const { error } = await supabase.from("leads").insert([{
-      name: name,
-      email: email,
-      city: city,
+      name, email, city,
       user_email: currentSession.email,
       session_id: sessionId,
       plan_at_submission: currentPlan || "unknown"
@@ -592,12 +670,11 @@
       }, 1200);
     }
   }
-
-  // ============= AUTH STATE LISTENER (Supabase) =============
+  
+  // Auth state listener
   async function initAuth() {
     if (!supabase) {
-      // no backend: provide DEMO mode login for testing
-      authMessageDiv.innerHTML = "<div class='small-text' style='color:#facc15;'>⚠️ Supabase not configured — using demo login (no DB). Click 'Demo access' below.</div>";
+      authMessageDiv.innerHTML = "<div class='small-text' style='color:#facc15;'>⚠️ Supabase not configured — using demo login. Click 'Demo Access' below.</div>";
       const demoBtn = document.createElement("button");
       demoBtn.innerText = "🔓 Demo Access (mock login)";
       demoBtn.className = "btn-outline";
@@ -611,8 +688,7 @@
       document.querySelector(".auth-panel")?.appendChild(demoBtn);
       return;
     }
-
-    // get current session
+    
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       currentSession = user;
@@ -621,8 +697,7 @@
     } else {
       refreshUIAfterAuth();
     }
-
-    // listen for auth changes
+    
     supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === "SIGNED_IN" && session?.user) {
         currentSession = session.user;
@@ -636,8 +711,7 @@
       }
     });
   }
-
-  // handle URL hash for email confirmation redirect
+  
   function handleRedirectFromEmail() {
     if (!supabase) return;
     const hashParams = new URLSearchParams(window.location.hash.substring(1));
@@ -650,21 +724,29 @@
         });
     }
   }
-
-  // attach event listeners
+  
+  // Event listeners
   document.getElementById("sendMagicLinkBtn")?.addEventListener("click", sendMagicLink);
   document.getElementById("manualRefreshPlanBtn")?.addEventListener("click", manualRefreshSubscription);
   document.getElementById("submitLeadBtn")?.addEventListener("click", submitLead);
-
-  // Set target="_blank" for all stripe links (already done, but ensure)
+  
+  // Attach buy now handlers dynamically (after DOM ready)
+  function attachBuyHandlers() {
+    document.querySelectorAll(".buy-now-btn").forEach(btn => {
+      btn.removeEventListener("click", buyHandler);
+      btn.addEventListener("click", buyHandler);
+    });
+  }
+  function buyHandler(e) {
+    const plan = e.currentTarget.dataset.plan;
+    showMockPurchase(plan);
+  }
+  
   window.addEventListener("DOMContentLoaded", () => {
     initAuth();
     handleRedirectFromEmail();
-    // additional styling for Stripe links to open in new tab
-    document.querySelectorAll(".stripe-link").forEach(link => {
-      link.setAttribute("target", "_blank");
-    });
-    // inform user to update supabase keys
+    attachBuyHandlers();
+    
     if (!isSupabaseConfigured) {
       const infoDiv = document.createElement("div");
       infoDiv.className = "small-text";
