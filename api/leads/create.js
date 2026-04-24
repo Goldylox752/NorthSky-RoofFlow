@@ -7,16 +7,18 @@ const supabase = createClient(
 );
 
 export default async function handler(req, res) {
+
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  try {
-    const { name, phone, city, org_id, source = "web" } = req.body;
+  const { name, phone, city, org_id, source = "web" } = req.body;
 
-    if (!name || !phone || !org_id) {
-      return res.status(400).json({ error: "Missing required fields" });
-    }
+  if (!name || !phone || !org_id) {
+    return res.status(400).json({ error: "Missing required fields" });
+  }
+
+  try {
 
     // =========================
     // 1. DUPLICATE CHECK
@@ -29,7 +31,7 @@ export default async function handler(req, res) {
       .maybeSingle();
 
     if (existing) {
-      return res.status(200).json({
+      return res.json({
         success: true,
         message: "Lead already exists",
         lead_id: existing.id
@@ -37,9 +39,9 @@ export default async function handler(req, res) {
     }
 
     // =========================
-    // 2. CREATE LEAD
+    // 2. CREATE LEAD (SOURCE OF TRUTH)
     // =========================
-    const { data: lead, error: leadError } = await supabase
+    const { data: lead, error } = await supabase
       .from("leads")
       .insert({
         name,
@@ -47,26 +49,26 @@ export default async function handler(req, res) {
         city,
         org_id,
         source,
-        status: "new",
+        status: "processing",
         score: 0,
         created_at: new Date().toISOString()
       })
       .select()
       .single();
 
-    if (leadError) {
-      console.error(leadError);
+    if (error) {
+      console.error(error);
       return res.status(500).json({ error: "Lead creation failed" });
     }
 
     // =========================
-    // 3. ASSIGNMENT ENGINE (SAFE)
+    // 3. ASSIGNMENT (CONTROLLED ENGINE)
     // =========================
     let assignment = null;
 
     try {
       assignment = await assignLead({
-        lead,
+        lead_id: lead.id,
         org_id,
         supabase
       });
@@ -74,38 +76,52 @@ export default async function handler(req, res) {
     } catch (err) {
       console.error("Assignment failed:", err);
 
-      // fallback state (IMPORTANT)
-      await supabase.from("leads").update({
-        status: "unassigned"
-      }).eq("id", lead.id);
-    }
+      await supabase
+        .from("leads")
+        .update({ status: "unassigned" })
+        .eq("id", lead.id);
 
-    // =========================
-    // 4. SAVE ASSIGNMENT
-    // =========================
-    if (assignment?.agent_id) {
-      await supabase.from("assignments").insert({
-        lead_id: lead.id,
-        agent_id: assignment.agent_id,
-        org_id,
-        status: "active",
-        created_at: new Date().toISOString()
+      return res.json({
+        success: true,
+        lead,
+        assigned: false
       });
     }
 
     // =========================
-    // 5. REALTIME EVENT
+    // 4. ATOMIC STATE UPDATE
+    // =========================
+    if (assignment?.agent_id) {
+
+      await Promise.all([
+        supabase.from("assignments").insert({
+          lead_id: lead.id,
+          agent_id: assignment.agent_id,
+          org_id,
+          status: "active",
+          created_at: new Date().toISOString()
+        }),
+
+        supabase.from("leads").update({
+          status: "assigned",
+          assigned_to: assignment.agent_id
+        }).eq("id", lead.id)
+      ]);
+    }
+
+    // =========================
+    // 5. EVENT LOG (OS AUDIT LAYER)
     // =========================
     await supabase.from("events").insert({
       type: "lead_assigned",
       org_id,
       payload: {
-        lead,
-        assignment
+        lead_id: lead.id,
+        agent_id: assignment?.agent_id
       }
     });
 
-    return res.status(200).json({
+    return res.json({
       success: true,
       lead,
       assigned_to: assignment?.agent_name || null
