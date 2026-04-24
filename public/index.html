@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>RoofFlow | We Book Roofing Jobs For You</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+
+<style>
+body{
+  font-family:Inter,sans-serif;
+  margin:0;
+  background:#0b1220;
+  color:#fff;
+}
+
+.container{
+  max-width:1100px;
+  margin:auto;
+  padding:40px 20px;
+}
+
+.hero{
+  text-align:center;
+  padding:90px 20px 50px;
+}
+
+h1{
+  font-size:48px;
+  font-weight:800;
+  line-height:1.05;
+}
+
+p{
+  opacity:.85;
+  max-width:750px;
+  margin:15px auto;
+  font-size:16px;
+}
+
+.badge{
+  display:inline-block;
+  background:#1e293b;
+  padding:6px 12px;
+  border-radius:999px;
+  font-size:12px;
+  margin-bottom:15px;
+}
+
+.card{
+  background:#121a2b;
+  border:1px solid #24314d;
+  border-radius:16px;
+  padding:25px;
+  margin:20px 0;
+}
+
+.btn{
+  background:#4f46e5;
+  padding:14px;
+  border-radius:10px;
+  color:#fff;
+  font-weight:700;
+  text-decoration:none;
+  display:inline-block;
+  margin-top:12px;
+  width:100%;
+  text-align:center;
+}
+
+.btn:hover{background:#6366f1}
+
+.section-title{font-size:22px;margin-bottom:10px}
+
+ul{padding-left:20px;opacity:.9}
+
+.small{font-size:13px;opacity:.6}
+
+.footer{
+  text-align:center;
+  opacity:.4;
+  font-size:12px;
+  margin-top:50px;
+}
+
+/* Sticky CTA */
+.sticky-cta{
+  position:fixed;
+  bottom:20px;
+  right:20px;
+  width:180px;
+  z-index:999;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<!-- HERO -->
+<div class="hero">
+  <div class="badge">RoofFlow — Roofing Job Booking System</div>
+
+  <h1>We Book Roofing Jobs<br/>Directly Into Your Calendar</h1>
+
+  <p>
+    No shared leads. No chasing homeowners. No competition.
+    <br/><br/>
+    <b>Just qualified roofing appointments sent directly to you.</b>
+  </p>
+
+  <!-- CTA (tracked) -->
+  <a href="/apply/" class="btn" onclick="trackCTA('apply_click')">
+    Apply For Your City
+  </a>
+
+  <p class="small">We only onboard a limited number of contractors per city.</p>
+</div>
+
+<!-- POSITIONING -->
+<div class="card">
+  <div class="section-title">Who This Is For</div>
+  <ul>
+    <li>Roofing contractors already doing consistent jobs</li>
+    <li>Companies spending on ads or lead platforms</li>
+    <li>Teams who want predictable booked work</li>
+  </ul>
+
+  <p class="small">If you're brand new — this is not for you.</p>
+</div>
+
+<!-- PROBLEM -->
+<div class="card">
+  <div class="section-title">Why Contractors Stay Stuck</div>
+  <ul>
+    <li>Leads are shared with competitors</li>
+    <li>You must respond instantly to compete</li>
+    <li>Most leads are not serious buyers</li>
+    <li>No predictable job flow</li>
+  </ul>
+</div>
+
+<!-- SOLUTION -->
+<div class="card">
+  <div class="section-title">What We Do Instead</div>
+  <ul>
+    <li>Filter homeowners before you see them</li>
+    <li>Identify real roofing intent</li>
+    <li>Pre-qualify every opportunity</li>
+    <li>Book only confirmed appointments</li>
+  </ul>
+</div>
+
+<!-- PROCESS -->
+<div class="card">
+  <div class="section-title">How It Works</div>
+  <ul>
+    <li>1. Homeowner submits request</li>
+    <li>2. System qualifies the lead</li>
+    <li>3. Job gets routed in real time</li>
+    <li>4. Appointment is booked for you</li>
+  </ul>
+</div>
+
+<!-- PRICING -->
+<div class="card" style="text-align:center">
+  <h2>Simple Pricing</h2>
+
+  <p><b>Pay only when jobs are booked</b></p>
+  <p class="small">No monthly retainers. No shared leads. No ad waste.</p>
+
+  <p><b>$1,000 setup + $150 per confirmed appointment</b></p>
+
+  <ul style="text-align:left;display:inline-block">
+    <li>No contracts</li>
+    <li>No shared leads</li>
+    <li>Pay only for results</li>
+  </ul>
+
+  <a href="/apply/" class="btn" onclick="trackCTA('apply_click')">
+    Apply Now
+  </a>
+
+  <p class="small">Most contractors receive first booked jobs within 3–7 days.</p>
+</div>
+
+<!-- PROOF -->
+<div class="card">
+  <div class="section-title">Recent Jobs Booked</div>
+  <ul>
+    <li>Edmonton — Roof replacement — $12,000 job</li>
+    <li>Calgary — Repair — $4,500 job</li>
+    <li>Toronto — Full install — $18,000 job</li>
+  </ul>
+</div>
+
+<!-- SCARCITY -->
+<div class="card" style="text-align:center">
+  <h2>Limited Availability</h2>
+
+  <p>
+    We currently limit onboarding per city to maintain lead quality.
+  </p>
+
+  <a href="/apply/" class="btn" onclick="trackCTA('apply_click')">
+    Apply For Your Spot
+  </a>
+</div>
+
+<!-- FINAL CTA -->
+<div class="card" style="text-align:center">
+  <h2>Want Consistent Roofing Jobs?</h2>
+  <p>Apply below to see if your city is available.</p>
+
+  <a href="/apply/" class="btn" onclick="trackCTA('apply_click')">
+    Apply Now
+  </a>
+</div>
+
+<div class="footer">
+  RoofFlow © 2026 — Roofing Job Booking System
+</div>
+
+</div>
+
+<!-- Sticky CTA -->
+<div class="sticky-cta">
+  <a class="btn" href="/apply/" onclick="trackCTA('sticky_apply_click')">
+    Apply Now
+  </a>
+</div>
+
+<!-- Tracking Scripts -->
+<script>
+function trackCTA(name){
+  fetch("/api/event", {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({
+      event: name,
+      page: window.location.pathname,
+      ts: Date.now()
+    })
+  });
+}
+
+// Scroll tracking
+window.addEventListener("scroll", () => {
+  let scroll = window.scrollY / document.body.scrollHeight;
+
+  if (scroll > 0.5 && !window.halfTracked) {
+    window.halfTracked = true;
+    trackCTA("scroll_50");
+  }
+});
+</script>
+
+</body>
+</html>
