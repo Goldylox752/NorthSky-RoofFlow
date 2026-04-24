@@ -6,11 +6,11 @@ const supabase = createClient(
 );
 
 /* =========================
-   MAIN QUEUE LOOP
+   MAIN QUEUE LOOP (SAFE)
 ========================= */
 export async function processQueue(org_id) {
   try {
-    // 1. GET ROUTING RULES
+    // 1. ROUTING RULES
     const { data: rules } = await supabase
       .from("routing_rules")
       .select("*")
@@ -19,40 +19,65 @@ export async function processQueue(org_id) {
 
     const routing = rules || {
       mode: "round_robin",
-      max_queue_size: 100,
       priority_boost_enabled: true
     };
 
-    // 2. FETCH QUEUED LEADS
+    // 2. FETCH QUEUED LEADS (LIMIT BATCH)
     const { data: queue } = await supabase
       .from("lead_queue")
       .select("*")
       .eq("org_id", org_id)
       .eq("status", "queued")
       .order("priority", { ascending: false })
-      .limit(20);
+      .limit(10);
 
-    if (!queue || queue.length === 0) return;
+    if (!queue?.length) return;
 
-    // 3. GET AVAILABLE AGENTS
+    // 3. FETCH AVAILABLE AGENTS
     const { data: agents } = await supabase
       .from("agents")
       .select("*")
       .eq("org_id", org_id)
       .eq("status", "online");
 
-    if (!agents || agents.length === 0) return;
+    if (!agents?.length) return;
 
-    // 4. PROCESS EACH LEAD
+    // 4. PROCESS LEADS SAFELY ONE-BY-ONE
     for (const leadItem of queue) {
+
+      // 🔒 LOCK LEAD (prevents double assignment)
+      const { data: locked } = await supabase
+        .from("lead_queue")
+        .update({ status: "processing" })
+        .eq("id", leadItem.id)
+        .eq("status", "queued")
+        .select()
+        .maybeSingle();
+
+      if (!locked) continue; // already taken
+
       const agent = pickAgent(agents, routing);
 
-      if (!agent) break;
+      if (!agent) {
+        // unlock if no agent
+        await supabase
+          .from("lead_queue")
+          .update({ status: "queued" })
+          .eq("id", leadItem.id);
+
+        continue;
+      }
 
       // capacity check
-      if (agent.active_leads >= agent.capacity) continue;
+      if (agent.active_leads >= agent.capacity) {
+        await supabase
+          .from("lead_queue")
+          .update({ status: "queued" })
+          .eq("id", leadItem.id);
 
-      // 5. ASSIGN LEAD
+        continue;
+      }
+
       await assignLeadToAgent({
         leadItem,
         agent,
@@ -67,40 +92,39 @@ export async function processQueue(org_id) {
 }
 
 /* =========================
-   AGENT SELECTION ENGINE
+   AGENT PICKER
 ========================= */
 function pickAgent(agents, routing) {
+  const available = [...agents].sort(
+    (a, b) => (a.active_leads || 0) - (b.active_leads || 0)
+  );
+
   switch (routing.mode) {
 
-    /* ROUND ROBIN */
     case "round_robin":
-      return agents.sort(
-        (a, b) => a.active_leads - b.active_leads
-      )[0];
+      return available[0];
 
-    /* PRIORITY / WEIGHTED */
     case "weighted":
-      return agents.sort(
+      return available.sort(
         (a, b) =>
           (a.capacity - a.active_leads) -
           (b.capacity - b.active_leads)
       )[0];
 
-    /* AI READY HOOK */
     case "ai_priority":
-      return agents.sort(
+      return available.sort(
         (a, b) =>
           (b.capacity - b.active_leads) -
           (a.capacity - a.active_leads)
       )[0];
 
     default:
-      return agents[0];
+      return available[0];
   }
 }
 
 /* =========================
-   CORE ASSIGNMENT LOGIC
+   SAFE ASSIGNMENT ENGINE
 ========================= */
 async function assignLeadToAgent({
   leadItem,
@@ -109,33 +133,31 @@ async function assignLeadToAgent({
   routing
 }) {
   try {
-    // 1. MARK LEAD AS ASSIGNED
+    // 1. ASSIGN LEAD
     await supabase
       .from("lead_queue")
       .update({
         status: "assigned",
-        assigned_agent_id: agent.id
+        assigned_agent_id: agent.id,
+        assigned_at: new Date().toISOString()
       })
       .eq("id", leadItem.id);
 
-    // 2. UPDATE AGENT LOAD
-    await supabase
-      .from("agents")
-      .update({
-        active_leads: agent.active_leads + 1
-      })
-      .eq("id", agent.id);
+    // 2. ATOMIC AGENT LOAD UPDATE
+    await supabase.rpc("increment_agent_load", {
+      agent_id: agent.id
+    });
 
-    // 3. SAVE ASSIGNMENT HISTORY
+    // 3. ASSIGNMENT HISTORY
     await supabase.from("assignment_history").insert({
       org_id,
       lead_id: leadItem.lead_id,
       agent_id: agent.id,
-      method: routing.mode || "round_robin",
-      assigned_at: new Date().toISOString()
+      method: routing.mode,
+      created_at: new Date().toISOString()
     });
 
-    // 4. REALTIME EVENT (FOR DASHBOARD)
+    // 4. REALTIME EVENT
     await supabase.from("events").insert({
       type: "lead_assigned",
       org_id,
@@ -151,5 +173,11 @@ async function assignLeadToAgent({
 
   } catch (err) {
     console.error("ASSIGNMENT ERROR:", err);
+
+    // rollback safe state
+    await supabase
+      .from("lead_queue")
+      .update({ status: "queued" })
+      .eq("id", leadItem.id);
   }
 }
