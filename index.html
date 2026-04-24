@@ -23,13 +23,13 @@ body {
 
 .hero {
   text-align: center;
-  padding: 70px 20px 40px;
+  padding: 80px 20px 40px;
 }
 
 h1 {
-  font-size: 44px;
+  font-size: 46px;
   font-weight: 800;
-  line-height: 1.1;
+  line-height: 1.05;
 }
 
 p {
@@ -37,6 +37,15 @@ p {
   max-width: 720px;
   margin: 15px auto;
   font-size: 16px;
+}
+
+.badge {
+  display: inline-block;
+  background: #1e293b;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  margin-bottom: 15px;
 }
 
 .card {
@@ -56,7 +65,6 @@ p {
 .price {
   font-size: 30px;
   font-weight: 800;
-  margin: 10px 0;
 }
 
 .btn {
@@ -69,16 +77,10 @@ p {
   cursor: pointer;
   width: 100%;
   margin-top: 12px;
-  font-size: 15px;
 }
 
 .btn:hover {
   background: #6366f1;
-}
-
-.small {
-  font-size: 13px;
-  opacity: 0.65;
 }
 
 .highlight {
@@ -96,14 +98,9 @@ ul {
   opacity: 0.9;
 }
 
-.badge {
-  display: inline-block;
-  background: #1f2a44;
-  padding: 6px 12px;
-  border-radius: 999px;
-  font-size: 12px;
-  margin-bottom: 15px;
-  opacity: 0.9;
+.small {
+  font-size: 13px;
+  opacity: 0.6;
 }
 
 .footer {
@@ -123,10 +120,10 @@ ul {
 <div class="hero">
   <div class="badge">Booked Roofing Jobs System</div>
 
-  <h1>We Don’t Sell Leads — We Book Roofing Jobs for You</h1>
+  <h1>We Book Roofing Jobs Into Your Calendar — Not Just Leads</h1>
 
   <p>
-    RoofFlow helps roofing contractors get <span class="highlight">qualified homeowner appointments directly into their calendar</span> using structured intake + real human qualification.
+    RoofFlow helps roofing contractors get <span class="highlight">qualified homeowner appointments</span> through a structured intake + call qualification system.
   </p>
 
   <button class="btn">Get Booked Roofing Jobs</button>
@@ -136,15 +133,13 @@ ul {
 
 <!-- PROBLEM -->
 <div class="card">
-  <div class="section-title">Why Most Roofing Companies Stay Stuck</div>
-  <p>
-    It’s not a lead problem — it’s a speed + follow-up problem.
-  </p>
+  <div class="section-title">Why Roofing Contractors Lose Money</div>
+  <p>It’s not a lead problem — it’s a conversion + follow-up problem.</p>
   <ul>
-    <li>Homeowners contact multiple contractors at once</li>
     <li>Leads go cold within minutes</li>
-    <li>Missed calls = lost $1,000–$5,000 jobs</li>
-    <li>Ads don’t convert without structure</li>
+    <li>Homeowners contact multiple contractors</li>
+    <li>Missed calls = lost $1K–$5K jobs</li>
+    <li>No system to qualify real buyers</li>
   </ul>
 </div>
 
@@ -152,43 +147,35 @@ ul {
 <div class="card">
   <div class="section-title">What RoofFlow Actually Does</div>
   <p>
-    RoofFlow is a booking system that turns homeowner inquiries into scheduled roofing appointments.
+    We don’t send you leads — we send you <b>booked roofing appointments</b>.
   </p>
   <ul>
-    <li>Captures incoming roofing requests</li>
-    <li>Call team qualifies each lead</li>
-    <li>Filters out low-intent inquiries</li>
-    <li>Books appointments directly into your calendar</li>
+    <li>Capture homeowner requests</li>
+    <li>Qualify urgency + property type</li>
+    <li>Filter low-intent leads</li>
+    <li>Book real appointments into your calendar</li>
   </ul>
 </div>
 
-<!-- HOW IT WORKS -->
+<!-- PROCESS -->
 <div class="card">
-  <div class="section-title">How You Get Roofing Jobs</div>
+  <div class="section-title">How It Works</div>
   <ul>
     <li>1. Homeowner submits roofing request</li>
-    <li>2. Our team verifies urgency + property details</li>
-    <li>3. Qualified job is booked into your schedule</li>
+    <li>2. Call team qualifies job (urgency + budget + property)</li>
+    <li>3. Appointment is booked directly into your schedule</li>
   </ul>
-
-  <p class="small">
-    You only show up for real, qualified roofing opportunities.
-  </p>
 </div>
 
-<!-- PROOF -->
+<!-- WHAT YOU GET -->
 <div class="card">
   <div class="section-title">What You Receive</div>
   <ul>
     <li>Verified homeowner contact</li>
-    <li>Property + issue details</li>
-    <li>Inspection-ready appointment</li>
-    <li>Pre-qualified job intent</li>
+    <li>Inspection-ready job details</li>
+    <li>Appointment time locked in</li>
+    <li>Pre-qualified intent (no tire kickers)</li>
   </ul>
-
-  <p class="small">
-    *Built for contractors who want predictable roofing schedules, not random leads.
-  </p>
 </div>
 
 <!-- PRICING -->
@@ -201,8 +188,8 @@ ul {
       <div class="section-title">Starter</div>
       <div class="price">5–10 jobs/mo</div>
       <ul>
-        <li>Entry booking system</li>
-        <li>Basic qualification flow</li>
+        <li>Basic booking system</li>
+        <li>Standard qualification flow</li>
       </ul>
       <button class="btn">Start Starter</button>
     </div>
@@ -230,12 +217,10 @@ ul {
   </div>
 </div>
 
-<!-- FINAL CTA -->
+<!-- CTA -->
 <div class="card" style="text-align:center;">
   <h2>Ready to Fill Your Roofing Calendar?</h2>
-  <p>
-    Stop chasing leads. Start getting booked roofing jobs instead.
-  </p>
+  <p>Stop buying leads. Start getting booked roofing jobs instead.</p>
   <button class="btn">Get Started Now</button>
 </div>
 
