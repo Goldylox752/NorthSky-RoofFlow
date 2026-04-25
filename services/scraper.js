@@ -1,3 +1,17 @@
+
+
+import { rateLimit } from "@/lib/rateLimit";
+
+export async function POST(req) {
+  const ip = req.headers.get("x-forwarded-for") || "unknown";
+
+  if (!rateLimit(ip)) {
+    return new Response("Too many requests", { status: 429 });
+  }
+
+  // scraper logic here
+}
+
 const requestMap = new Map();
 
 export function rateLimit(ip, limit = 10, windowMs = 60000) {
