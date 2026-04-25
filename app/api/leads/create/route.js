@@ -7,20 +7,28 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// 🧠 Lead scoring helper
+// 🧠 Lead scoring engine
 function calculateLeadScore({ email, phone, zip }) {
   let score = 0;
+
   if (email) score += 40;
   if (phone) score += 30;
   if (zip) score += 30;
+
   return score;
 }
 
-// 🔥 Lead status engine
+// 🔥 Status engine
 function getLeadStatus(score) {
   if (score >= 80) return "hot";
   if (score >= 50) return "warm";
   return "new";
+}
+
+// 🔐 Basic validators
+function isValidPhone(phone) {
+  const cleaned = phone.replace(/\D/g, "");
+  return cleaned.length >= 10 && cleaned.length <= 15;
 }
 
 export async function POST(req) {
@@ -37,10 +45,10 @@ export async function POST(req) {
       plan = "",
     } = body;
 
-    // 🔐 validation
-    if (!phone) {
+    // 🚨 validation
+    if (!phone || !isValidPhone(phone)) {
       return Response.json(
-        { error: "Phone is required" },
+        { error: "Valid phone is required" },
         { status: 400 }
       );
     }
@@ -49,7 +57,7 @@ export async function POST(req) {
     const lead_score = calculateLeadScore({ email, phone, zip });
     const status = getLeadStatus(lead_score);
 
-    // 💾 save lead
+    // 💾 insert into Supabase
     const { data, error } = await supabase
       .from("leads")
       .insert([
@@ -70,7 +78,7 @@ export async function POST(req) {
       .single();
 
     if (error) {
-      console.error("Supabase error:", error);
+      console.error("Supabase insert error:", error);
 
       return Response.json(
         { error: "Failed to save lead" },
@@ -78,7 +86,7 @@ export async function POST(req) {
       );
     }
 
-    // ✅ response
+    // ✅ response back to frontend
     return Response.json({
       success: true,
       lead: data,
@@ -87,7 +95,7 @@ export async function POST(req) {
     console.error("Server error:", err);
 
     return Response.json(
-      { error: "Server error" },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }
