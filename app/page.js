@@ -1,5 +1,8 @@
-"use client";
-
-import { supabase } from "@/lib/supabaseClient";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+export default function Home() {
+  return (
+    <main>
+      <h1>NorthSky RoofFlow</h1>
+      <p>Platform is running.</p>
+    </main>
+  );
+}
