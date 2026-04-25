@@ -1,23 +1,61 @@
+import Stripe from "stripe";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+// 💰 Updated pricing (HIGHER VALUE POSITIONING)
+const PRICES = {
+  starter: {
+    amount: 9900, // $99
+    name: "RoofFlow Starter",
+  },
+  growth: {
+    amount: 19900, // $199
+    name: "RoofFlow Growth",
+  },
+  domination: {
+    amount: 39900, // $399
+    name: "RoofFlow Domination",
+  },
+};
+
 export async function POST(req) {
   try {
-    const body = await req.json();
+    const { plan, email, phone } = await req.json();
 
-    // ONLY stripe logic here
+    // validate plan
+    if (!PRICES[plan]) {
+      return Response.json({ error: "Invalid plan" }, { status: 400 });
+    }
+
+    const selected = PRICES[plan];
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
+      mode: "payment",
+
       line_items: [
         {
           price_data: {
             currency: "usd",
-            product_data: { name: "RoofFlow Lead" },
-            unit_amount: 5000,
+            product_data: {
+              name: selected.name,
+              description: `RoofFlow ${plan} plan - automated lead system`,
+            },
+            unit_amount: selected.amount,
           },
           quantity: 1,
         },
       ],
-      mode: "payment",
+
+      // 🔥 CRITICAL: used by webhook + DB + dashboard unlock
+      metadata: {
+        plan,
+        email: email || "",
+        phone: phone || "",
+      },
+
       success_url: `${process.env.BASE_URL}/success`,
-      cancel_url: `${process.env.BASE_URL}/cancel`,
+      cancel_url: `${process.env.BASE_URL}/apply`,
     });
 
     return Response.json({ url: session.url });
