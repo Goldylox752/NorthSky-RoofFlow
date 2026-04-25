@@ -1,13 +1,32 @@
-import { getSupabaseServer } from "@/lib/supabaseServer";
+import { getSupabaseServer } from "../../../lib/supabaseServer";
 
 export async function GET() {
-  const supabase = getSupabaseServer();
+  try {
+    const supabase = getSupabaseServer();
 
-  const { data, error } = await supabase.auth.getUser();
+    if (!supabase) {
+      return Response.json(
+        { error: "Supabase server not configured" },
+        { status: 500 }
+      );
+    }
 
-  if (error) {
-    return Response.json({ error: error.message }, { status: 401 });
+    const { data, error } = await supabase.auth.getUser();
+
+    if (error) {
+      return Response.json(
+        { error: error.message },
+        { status: 401 }
+      );
+    }
+
+    return Response.json({
+      user: data?.user ?? null
+    });
+  } catch (err) {
+    return Response.json(
+      { error: "Server error", details: err.message },
+      { status: 500 }
+    );
   }
-
-  return Response.json({ user: data.user });
 }
