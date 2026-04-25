@@ -7,11 +7,16 @@ export default function SuccessPage() {
         <h1 style={styles.title}>Payment Successful 🎉</h1>
 
         <p style={styles.text}>
-          Your subscription has been activated. Welcome to RoofFlow.
+          Your payment went through successfully.
         </p>
 
         <p style={styles.subtext}>
-          You can now start receiving qualified roofing leads automatically.
+          Your account is now being activated. This usually takes a few seconds
+          while Stripe confirms your subscription.
+        </p>
+
+        <p style={styles.note}>
+          If access doesn’t appear instantly, refresh your dashboard in ~10–15 seconds.
         </p>
 
         <div style={styles.actions}>
@@ -46,7 +51,7 @@ const styles = {
     borderRadius: "16px",
     border: "1px solid #1f2937",
     textAlign: "center",
-    maxWidth: "500px",
+    maxWidth: "520px",
   },
 
   title: {
@@ -63,6 +68,12 @@ const styles = {
   subtext: {
     fontSize: "14px",
     color: "#9ca3af",
+    marginBottom: "15px",
+  },
+
+  note: {
+    fontSize: "12px",
+    color: "#6b7280",
     marginBottom: "30px",
   },
 
@@ -79,6 +90,7 @@ const styles = {
     color: "#fff",
     borderRadius: "10px",
     textDecoration: "none",
+    fontWeight: "bold",
   },
 
   secondaryBtn: {
