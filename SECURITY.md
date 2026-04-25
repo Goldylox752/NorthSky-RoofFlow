@@ -2,20 +2,80 @@
 
 ## Supported Versions
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+We actively support the latest version of RoofFlow.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+| Version | Supported |
+|--------|----------|
+| latest | ✅ |
+| older  | ❌ |
+
+---
 
 ## Reporting a Vulnerability
 
-Use this section to tell people how to report a vulnerability.
+If you discover a security issue, please do NOT open a public issue.
 
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+Instead, report it here:
+
+- Email: security@yourdomain.com
+
+We will respond within 48–72 hours.
+
+---
+
+## What to include
+
+Please include:
+- Description of the issue
+- Steps to reproduce
+- Potential impact
+
+---
+
+## Scope
+
+This includes:
+- Stripe integrations
+- Supabase database access
+- API endpoints under `/app/api`
+- Authentication flows# Security Policy
+
+## Supported Versions
+
+We actively support the latest version of RoofFlow.
+
+| Version | Supported |
+|--------|----------|
+| latest | ✅ |
+| older  | ❌ |
+
+---
+
+## Reporting a Vulnerability
+
+If you discover a security issue, please do NOT open a public issue.
+
+Instead, report it here:
+
+- Email: security@yourdomain.com
+
+We will respond within 48–72 hours.
+
+---
+
+## What to include
+
+Please include:
+- Description of the issue
+- Steps to reproduce
+- Potential impact
+
+---
+
+## Scope
+
+This includes:
+- Stripe integrations
+- Supabase database access
+- API endpoints under `/app/api`
+- Authentication flows
