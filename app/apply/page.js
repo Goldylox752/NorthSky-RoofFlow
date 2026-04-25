@@ -4,6 +4,7 @@ import { useState } from "react";
 
 export default function Apply() {
   const [step, setStep] = useState(1);
+
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [plan, setPlan] = useState("growth");
@@ -11,11 +12,13 @@ export default function Apply() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // 🔐 Validation
   const isValidEmail = (email) => /\S+@\S+\.\S+/.test(email);
 
   const isValidPhone = (phone) =>
     /^[0-9]{10,15}$/.test(phone.replace(/\D/g, ""));
 
+  // 🧠 Lead scoring (frontend UX only — backend must re-check)
   const scoreLead = () => {
     let score = 0;
     if (isValidEmail(email)) score += 50;
@@ -23,25 +26,30 @@ export default function Apply() {
     return score;
   };
 
+  // 👉 Step 1 → Step 2
   const handleNext = () => {
     setError("");
 
     if (!isValidEmail(email)) {
-      return setError("Please enter a valid email.");
+      return setError("Enter a valid email to continue.");
     }
 
     setStep(2);
   };
 
+  // 🚀 Checkout submit
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
 
+    if (!isValidPhone(phone)) {
+      return setError("Enter a valid phone number.");
+    }
+
     const leadScore = scoreLead();
 
-    // ⚠️ FRONTEND GATE (UX ONLY — backend must also validate)
-    if (!isValidPhone(phone)) {
-      return setError("Please enter a valid phone number.");
+    if (leadScore < 80) {
+      return setError("Sorry, we only accept qualified contractors.");
     }
 
     setLoading(true);
@@ -56,7 +64,7 @@ export default function Apply() {
           email,
           phone,
           plan,
-          leadScore, // 🔥 IMPORTANT FOR SERVER VALIDATION
+          leadScore,
         }),
       });
 
@@ -72,7 +80,7 @@ export default function Apply() {
         window.location.href = data.url;
       }
     } catch (err) {
-      setError("Something went wrong. Try again.");
+      setError("Something went wrong. Please try again.");
       setLoading(false);
     }
   };
@@ -82,31 +90,35 @@ export default function Apply() {
       <div style={styles.card}>
         <h1 style={styles.h1}>Apply to RoofFlow</h1>
 
+        <p style={styles.subtext}>
+          Automated roofing leads + booking system
+        </p>
+
         <p style={styles.step}>Step {step} of 2</p>
 
         <p style={styles.badges}>
-          🔒 No spam · ⚡ Instant approval · 🏠 Exclusive leads only
+          🔒 Secure application · ⚡ Instant qualification · 🏠 Exclusive access
         </p>
 
-        {/* PLAN SELECTOR */}
+        {/* 🧠 PLAN SELECTOR */}
         <div style={styles.planBox}>
-          <p style={{ fontSize: 12, marginBottom: 6 }}>Choose Plan</p>
+          <p style={styles.labelSmall}>Choose Your Plan</p>
 
           <select
             value={plan}
             onChange={(e) => setPlan(e.target.value)}
             style={styles.select}
           >
-            <option value="starter">Starter — $99</option>
-            <option value="growth">Growth — $199</option>
-            <option value="domination">Domination — $399</option>
+            <option value="starter">Starter — $99/mo</option>
+            <option value="growth">Growth — $199/mo</option>
+            <option value="domination">Domination — $399/mo</option>
           </select>
         </div>
 
         <form onSubmit={handleSubmit} style={styles.form}>
           {step === 1 && (
             <>
-              <label style={styles.label}>Email</label>
+              <label style={styles.label}>Business Email</label>
               <input
                 placeholder="you@company.com"
                 value={email}
@@ -131,7 +143,7 @@ export default function Apply() {
               />
 
               <button type="submit" style={styles.button}>
-                {loading ? "Redirecting..." : "Continue to Checkout"}
+                {loading ? "Redirecting to Stripe..." : "Continue to Payment"}
               </button>
             </>
           )}
@@ -160,15 +172,40 @@ const styles = {
     background: "#111a2e",
     padding: 30,
     borderRadius: 12,
+    boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
   },
 
-  h1: { fontSize: 26, marginBottom: 10 },
+  h1: {
+    fontSize: 26,
+    marginBottom: 6,
+  },
 
-  step: { fontSize: 14, opacity: 0.7 },
+  subtext: {
+    fontSize: 13,
+    opacity: 0.7,
+    marginBottom: 10,
+  },
 
-  badges: { fontSize: 12, opacity: 0.7, marginBottom: 15 },
+  step: {
+    fontSize: 14,
+    opacity: 0.7,
+  },
 
-  planBox: { marginBottom: 15 },
+  badges: {
+    fontSize: 12,
+    opacity: 0.7,
+    marginBottom: 15,
+  },
+
+  planBox: {
+    marginBottom: 15,
+  },
+
+  labelSmall: {
+    fontSize: 12,
+    marginBottom: 6,
+    opacity: 0.8,
+  },
 
   select: {
     width: "100%",
@@ -179,9 +216,16 @@ const styles = {
     border: "1px solid #333",
   },
 
-  form: { display: "flex", flexDirection: "column", gap: 10 },
+  form: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+  },
 
-  label: { fontSize: 12 },
+  label: {
+    fontSize: 12,
+    opacity: 0.8,
+  },
 
   input: {
     padding: 12,
@@ -202,5 +246,8 @@ const styles = {
     fontWeight: "bold",
   },
 
-  error: { color: "#ff6b6b", fontSize: 12 },
+  error: {
+    color: "#ff6b6b",
+    fontSize: 12,
+  },
 };
