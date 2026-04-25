@@ -1,8 +1,5 @@
-export default function Home() {
-  return (
-    <main>
-      <h1>RoofFlow</h1>
-      <p>We book roofing jobs for you.</p>
-    </main>
-  );
-}
+"use client";
+
+import { supabase } from "@/lib/supabaseClient";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
