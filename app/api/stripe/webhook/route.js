@@ -1,8 +1,14 @@
 import Stripe from "stripe";
+import { createClient } from "@supabase/supabase-js";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
 export async function POST(req) {
-  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-
   const sig = req.headers.get("stripe-signature");
   const body = await req.text();
 
@@ -18,5 +24,19 @@ export async function POST(req) {
     return new Response("Webhook Error", { status: 400 });
   }
 
-  return Response.json({ received: true });
+  // 🎯 SUCCESS EVENT
+  if (event.type === "checkout.session.completed") {
+    const session = event.data.object;
+
+    const email = session.customer_details?.email;
+
+    if (email) {
+      await supabase
+        .from("leads")
+        .update({ status: "active" })
+        .eq("email", email);
+    }
+  }
+
+  return new Response("OK");
 }
