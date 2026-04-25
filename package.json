@@ -12,6 +12,7 @@
     "react": "latest",
     "react-dom": "latest",
     "@supabase/supabase-js": "^2.0.0",
-    "openai": "^4.0.0"
+    "openai": "^4.0.0",
+    "stripe": "^14.0.0"
   }
 }
