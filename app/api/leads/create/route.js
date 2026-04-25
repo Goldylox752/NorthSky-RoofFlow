@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { geoEngine } from "@/lib/geoEngine";
 
 export const runtime = "nodejs";
 
@@ -6,30 +7,6 @@ const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
-
-// 🧠 Lead scoring engine
-function calculateLeadScore({ email, phone, zip }) {
-  let score = 0;
-
-  if (email) score += 40;
-  if (phone) score += 30;
-  if (zip) score += 30;
-
-  return score;
-}
-
-// 🔥 Status engine
-function getLeadStatus(score) {
-  if (score >= 80) return "hot";
-  if (score >= 50) return "warm";
-  return "new";
-}
-
-// 🔐 Basic validators
-function isValidPhone(phone) {
-  const cleaned = phone.replace(/\D/g, "");
-  return cleaned.length >= 10 && cleaned.length <= 15;
-}
 
 export async function POST(req) {
   try {
@@ -42,22 +19,28 @@ export async function POST(req) {
       city = "",
       zip = "",
       source = "website",
-      plan = "",
     } = body;
 
-    // 🚨 validation
-    if (!phone || !isValidPhone(phone)) {
+    if (!phone) {
       return Response.json(
-        { error: "Valid phone is required" },
+        { error: "Phone required" },
         { status: 400 }
       );
     }
 
-    // 🧠 scoring
-    const lead_score = calculateLeadScore({ email, phone, zip });
-    const status = getLeadStatus(lead_score);
+    // 🧠 lead score
+    let lead_score = 0;
+    if (email) lead_score += 40;
+    if (phone) lead_score += 30;
+    if (zip) lead_score += 30;
 
-    // 💾 insert into Supabase
+    const { region, priority } = geoEngine({
+      city,
+      zip,
+      lead_score,
+    });
+
+    // 💾 SAVE
     const { data, error } = await supabase
       .from("leads")
       .insert([
@@ -67,10 +50,11 @@ export async function POST(req) {
           phone,
           city,
           zip,
-          plan,
           source,
           lead_score,
-          status,
+          status: "new",
+          geo_region: region,
+          priority,
           created_at: new Date().toISOString(),
         },
       ])
@@ -78,24 +62,21 @@ export async function POST(req) {
       .single();
 
     if (error) {
-      console.error("Supabase insert error:", error);
-
       return Response.json(
-        { error: "Failed to save lead" },
+        { error: "DB insert failed" },
         { status: 500 }
       );
     }
 
-    // ✅ response back to frontend
     return Response.json({
       success: true,
       lead: data,
+      geo: { region, priority },
     });
-  } catch (err) {
-    console.error("Server error:", err);
 
+  } catch (err) {
     return Response.json(
-      { error: "Internal server error" },
+      { error: "Server error" },
       { status: 500 }
     );
   }
