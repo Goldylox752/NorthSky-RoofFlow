@@ -7,20 +7,37 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+// 🧠 Lead scoring helper
+function calculateLeadScore({ email, phone, zip }) {
+  let score = 0;
+  if (email) score += 40;
+  if (phone) score += 30;
+  if (zip) score += 30;
+  return score;
+}
+
+// 🔥 Lead status engine
+function getLeadStatus(score) {
+  if (score >= 80) return "hot";
+  if (score >= 50) return "warm";
+  return "new";
+}
+
 export async function POST(req) {
   try {
     const body = await req.json();
 
     const {
-      name,
-      email,
+      name = "",
+      email = "",
       phone,
-      city,
-      zip,
+      city = "",
+      zip = "",
       source = "website",
+      plan = "",
     } = body;
 
-    // 🔐 basic validation
+    // 🔐 validation
     if (!phone) {
       return Response.json(
         { error: "Phone is required" },
@@ -28,13 +45,11 @@ export async function POST(req) {
       );
     }
 
-    // 🧠 simple lead scoring (you can improve later)
-    let lead_score = 0;
-    if (email) lead_score += 40;
-    if (phone) lead_score += 30;
-    if (zip) lead_score += 30;
+    // 🧠 scoring
+    const lead_score = calculateLeadScore({ email, phone, zip });
+    const status = getLeadStatus(lead_score);
 
-    // 💾 SAVE TO SUPABASE (this is the key part)
+    // 💾 save lead
     const { data, error } = await supabase
       .from("leads")
       .insert([
@@ -44,9 +59,10 @@ export async function POST(req) {
           phone,
           city,
           zip,
+          plan,
           source,
           lead_score,
-          status: "new",
+          status,
           created_at: new Date().toISOString(),
         },
       ])
@@ -62,7 +78,7 @@ export async function POST(req) {
       );
     }
 
-    // ✅ response back to frontend
+    // ✅ response
     return Response.json({
       success: true,
       lead: data,
