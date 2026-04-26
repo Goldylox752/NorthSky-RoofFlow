@@ -1,9 +1,5 @@
-import Stripe from "stripe";
+import { stripe } from "@/lib/stripe";
 import { createClient } from "@supabase/supabase-js";
-
-export const runtime = "nodejs";
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -11,95 +7,64 @@ const supabase = createClient(
 );
 
 export async function POST(req) {
+  const body = await req.text();
   const sig = req.headers.get("stripe-signature");
-  const rawBody = await req.text();
 
   let event;
 
-  // 🔒 Verify Stripe signature
   try {
     event = stripe.webhooks.constructEvent(
-      rawBody,
+      body,
       sig,
       process.env.STRIPE_WEBHOOK_SECRET
     );
   } catch (err) {
-    console.error("❌ Stripe webhook signature failed:", err.message);
-    return new Response("Invalid signature", { status: 400 });
+    return Response.json({ error: "Invalid webhook" }, { status: 400 });
   }
 
-  // 🔒 Idempotency check (prevents duplicate processing)
-  const { data: alreadyProcessed } = await supabase
-    .from("stripe_events")
-    .select("id")
-    .eq("id", event.id)
-    .single();
+  // =========================
+  // 💰 PAYMENT SUCCESS
+  // =========================
+  if (event.type === "checkout.session.completed") {
+    const session = event.data.object;
 
-  if (alreadyProcessed) {
-    return new Response("Already processed", { status: 200 });
+    const userId = session.metadata.userId;
+
+    const amount = session.amount_total;
+
+    let role = "contractor_basic";
+
+    if (amount >= 9900) role = "contractor_pro";
+    if (amount >= 24900) role = "contractor_premium";
+
+    // 🔐 UPDATE USER ACCESS
+    await supabase
+      .from("profiles")
+      .update({
+        role,
+        subscription_status: "active",
+        stripe_customer_id: session.customer,
+        stripe_subscription_id: session.subscription,
+      })
+      .eq("id", userId);
   }
 
-  try {
-    // =========================
-    // CHECKOUT COMPLETED EVENT
-    // =========================
-    if (event.type === "checkout.session.completed") {
-      const session = event.data.object;
+  // =========================
+  // ❌ PAYMENT FAILED / CANCELED
+  // =========================
+  if (
+    event.type === "customer.subscription.deleted"
+  ) {
+    const subscription = event.data.object;
 
-      const email =
-        session.customer_email ||
-        session.customer_details?.email;
-
-      const phone = session.metadata?.phone || "";
-      const plan = session.metadata?.plan || "";
-      const leadScore = session.metadata?.leadScore || "0";
-
-      const validPlans = ["starter", "growth", "domination"];
-
-      if (!email || !validPlans.includes(plan)) {
-        console.error("❌ Invalid webhook payload", {
-          email,
-          plan,
-        });
-        return new Response("Invalid data", { status: 400 });
-      }
-
-      // =========================
-      // UPSERT LEAD
-      // =========================
-      const { error } = await supabase.from("leads").upsert(
-        {
-          email,
-          phone,
-          plan,
-          lead_score: Number(leadScore),
-          status: "active",
-          stripe_session_id: session.id,
-          updated_at: new Date().toISOString(),
-        },
-        {
-          onConflict: "email",
-        }
-      );
-
-      if (error) {
-        console.error("❌ Supabase upsert error:", error.message);
-      }
-
-      // =========================
-      // LOG EVENT (idempotency)
-      // =========================
-      await supabase.from("stripe_events").insert({
-        id: event.id,
-        type: event.type,
-        created_at: new Date().toISOString(),
-      });
-    }
-
-    return new Response("OK", { status: 200 });
-
-  } catch (err) {
-    console.error("❌ Webhook handler error:", err);
-    return new Response("Server error", { status: 500 });
+    await supabase
+      .from("profiles")
+      .update({
+        subscription_status: "inactive",
+        role: "buyer",
+      })
+      .eq("stripe_subscription_id", subscription.id);
   }
+
+  return Response.json({ received: true });
 }
