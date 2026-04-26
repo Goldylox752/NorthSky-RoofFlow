@@ -9,7 +9,7 @@ export default function Home() {
         </h1>
 
         <p className="mt-6 text-lg text-gray-600 max-w-2xl mx-auto">
-          RoofFlow connects roofing contractors with high-intent homeowners actively requesting estimates in their area — not clicks, not cold traffic, real demand.
+          RoofFlow connects roofing contractors with homeowners actively requesting roofing estimates — no cold calls, no shared leads, only real buying intent.
         </p>
 
         <div className="mt-8 flex gap-4 justify-center flex-wrap">
@@ -24,7 +24,7 @@ export default function Home() {
             href="#how-it-works"
             className="border border-gray-300 px-6 py-3 rounded-lg font-medium"
           >
-            See How It Works
+            How It Works
           </a>
         </div>
 
@@ -36,7 +36,7 @@ export default function Home() {
       {/* TRUST STRIP */}
       <section className="bg-gray-50 py-10 px-6 text-center text-gray-600">
         <p className="max-w-3xl mx-auto">
-          Built for roofing contractors across Canada & the U.S. focused on real homeowner intent — not lead lists or paid clicks.
+          Built for roofing contractors across Canada & the U.S. focused on verified homeowner intent — not pay-per-click traffic or recycled lead lists.
         </p>
       </section>
 
@@ -48,23 +48,23 @@ export default function Home() {
 
         <div className="mt-10 grid md:grid-cols-3 gap-6">
           <div className="p-6 border rounded-xl">
-            <h3 className="font-semibold mb-2">1. Capture Local Demand</h3>
+            <h3 className="font-semibold mb-2">1. Capture Demand</h3>
             <p className="text-gray-600">
-              Homeowners actively searching for roofing services request estimates in your service area.
+              Homeowners actively searching for roofing services submit estimate requests in your area.
             </p>
           </div>
 
           <div className="p-6 border rounded-xl">
-            <h3 className="font-semibold mb-2">2. Filter & Qualify</h3>
+            <h3 className="font-semibold mb-2">2. Qualify Leads</h3>
             <p className="text-gray-600">
-              Every request is screened for intent, location, and urgency before delivery.
+              Every request is filtered for intent, location, and urgency before delivery.
             </p>
           </div>
 
           <div className="p-6 border rounded-xl">
-            <h3 className="font-semibold mb-2">3. Get Booked Opportunities</h3>
+            <h3 className="font-semibold mb-2">3. Get Booked Jobs</h3>
             <p className="text-gray-600">
-              Receive ready-to-book roofing appointments — not raw or unverified leads.
+              Receive ready-to-book roofing appointments, not raw or unverified leads.
             </p>
           </div>
         </div>
@@ -80,7 +80,7 @@ export default function Home() {
           <div className="p-6 bg-gray-800 rounded-xl">
             <h3 className="font-semibold mb-2">Google Ads</h3>
             <p className="text-gray-300">
-              Pay per click with no guarantee of intent or conversion.
+              Pay per click with unpredictable lead quality and intent.
             </p>
           </div>
 
@@ -109,7 +109,7 @@ export default function Home() {
         <div className="mt-10 grid md:grid-cols-2 gap-6">
           <div className="p-6 border rounded-xl">
             <p className="text-gray-700">
-              “Every lead we receive is actually looking for roofing work. Huge difference.”
+              “Every lead is real intent. We stopped wasting time on junk inquiries.”
             </p>
             <span className="text-sm text-gray-500 mt-3 block">
               — Roofing Contractor, Alberta
@@ -181,7 +181,7 @@ export default function Home() {
         </h2>
 
         <div className="mt-10 max-w-3xl mx-auto space-y-6 text-gray-300">
-          <p><b className="text-white">Are leads exclusive?</b><br />Yes — only one contractor per territory.</p>
+          <p><b className="text-white">Are leads exclusive?</b><br />Yes — one contractor per territory only.</p>
           <p><b className="text-white">Do you guarantee sales?</b><br />No — we deliver qualified opportunities, not closed deals.</p>
           <p><b className="text-white">How fast do leads arrive?</b><br />Usually within 24–72 hours.</p>
         </div>
