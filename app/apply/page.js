@@ -11,11 +11,8 @@ export default function Apply() {
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-
   const [lastSubmit, setLastSubmit] = useState(0);
-
-  // 🕳️ honeypot (bot trap)
-  const [website, setWebsite] = useState("");
+  const [website, setWebsite] = useState(""); // honeypot
 
   const isValidEmail = (v) => /\S+@\S+\.\S+/.test(v);
 
@@ -45,23 +42,9 @@ export default function Apply() {
     return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
   };
 
-  const handlePhoneChange = (e) => {
-    setPhone(formatPhone(e.target.value));
-  };
-
   const cleanedPhone = useMemo(() => normalizePhone(phone), [phone]);
-
   const isValidPhone = cleanedPhone.length === 10;
 
-  const detectRegion = (digits) =>
-    digits.startsWith("1") ? "US/CA (+1)" : "Local";
-
-  const region = useMemo(
-    () => detectRegion(cleanedPhone),
-    [cleanedPhone]
-  );
-
-  // 🧠 improved scoring (simple but scalable to AI later)
   const leadScore = useMemo(() => {
     let score = 0;
 
@@ -93,12 +76,8 @@ export default function Apply() {
     e.preventDefault();
     setError("");
 
-    // 🕳️ bot detection
-    if (website) {
-      return setError("Bot detected.");
-    }
+    if (website) return setError("Bot detected.");
 
-    // 🛡️ spam throttle
     const now = Date.now();
     if (now - lastSubmit < 10000) {
       return setError("Please wait before submitting again.");
@@ -106,11 +85,11 @@ export default function Apply() {
     setLastSubmit(now);
 
     if (!isValidPhone) {
-      return setError("Enter a valid 10-digit phone number.");
+      return setError("Enter a valid phone number.");
     }
 
     if (!isQualified) {
-      return setError("We only accept qualified roofing contractors.");
+      return setError("Application not approved for your region.");
     }
 
     setLoading(true);
@@ -121,19 +100,15 @@ export default function Apply() {
         phone: cleanedPhone,
         plan,
         lead_score: leadScore,
-        region,
-        hot_lead: leadScore >= 90,
         source: "apply_form",
       };
 
-      // 1️⃣ SAVE LEAD
       await fetch("/api/leads/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
-      // 2️⃣ STRIPE CHECKOUT
       const res = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -147,7 +122,7 @@ export default function Apply() {
       if (data?.url) window.location.href = data.url;
 
     } catch (err) {
-      setError(err.message || "Something went wrong. Try again.");
+      setError(err.message || "Something went wrong.");
       setLoading(false);
     }
   };
@@ -156,58 +131,58 @@ export default function Apply() {
     <div style={styles.page}>
       <div style={styles.card}>
 
-        {/* 🕳️ honeypot field */}
+        {/* Honeypot */}
         <input
           value={website}
           onChange={(e) => setWebsite(e.target.value)}
           style={{ display: "none" }}
           tabIndex="-1"
-          autoComplete="off"
         />
 
-        {/* 🧱 BRAND HEADER (trust focused) */}
-        <h1 style={styles.h1}>RoofFlow Applications</h1>
+        {/* HEADER */}
+        <h1 style={styles.h1}>
+          Apply for Exclusive Roofing Leads in Your Territory
+        </h1>
 
         <p style={styles.subtext}>
-          We connect roofing contractors with homeowners actively requesting estimates.
+          We only accept a limited number of contractors per region to maintain lead quality and exclusivity.
         </p>
 
-        {/* 🔥 TRUST / STATUS */}
-        <p
-          style={{
-            fontSize: 13,
-            fontWeight: "bold",
-            marginTop: 10,
-            color: isQualified ? "#22c55e" : "#f87171",
-          }}
-        >
-          {isQualified ? "🔥 Qualified Lead (High Intent)" : "⚠️ Qualification Required"}
+        {/* STATUS */}
+        <p style={{
+          fontSize: 13,
+          fontWeight: "bold",
+          color: isQualified ? "#22c55e" : "#f87171",
+        }}>
+          {isQualified
+            ? "✅ Pre-Qualified — Priority Access Available"
+            : "⚠️ Qualification Required"}
         </p>
 
         <p style={styles.step}>Step {step} of 2</p>
 
-        {/* 🛡️ TRUST SIGNAL BAR */}
+        {/* TRUST */}
         <p style={styles.badges}>
-          🌎 {region} · 🔒 Secure Checkout · 🛡️ Spam Protected · ⚡ Instant Scoring
+          🔒 Secure · 🛡️ Spam Protected · ⚡ Instant Approval · 🌎 Limited Territories
         </p>
 
-        {/* 💰 PLAN */}
+        {/* PLAN */}
         <div style={styles.planBox}>
-          <p style={styles.labelSmall}>Select Plan</p>
+          <p style={styles.labelSmall}>Select Access Level</p>
 
           <select
             value={plan}
             onChange={(e) => setPlan(e.target.value)}
             style={styles.select}
           >
-            <option value="starter">Starter — $499/mo</option>
-            <option value="growth">Growth — $999/mo</option>
-            <option value="domination">Domination — $1,999/mo</option>
+            <option value="starter">Starter — 5–10 Leads ($499/mo)</option>
+            <option value="growth">Growth — 15–30 Leads ($999/mo)</option>
+            <option value="domination">Domination — Exclusive Territory ($1,999/mo)</option>
           </select>
         </div>
 
-        {/* FORM */}
         <form onSubmit={handleSubmit} style={styles.form}>
+
           {step === 1 && (
             <>
               <label style={styles.label}>Business Email</label>
@@ -220,7 +195,7 @@ export default function Apply() {
               />
 
               <button type="button" onClick={handleNext} style={styles.button}>
-                Continue
+                Check Availability
               </button>
             </>
           )}
@@ -231,18 +206,19 @@ export default function Apply() {
 
               <input
                 value={phone}
-                onChange={handlePhoneChange}
+                onChange={(e) => setPhone(formatPhone(e.target.value))}
                 placeholder="(780) 123-4567"
                 style={styles.input}
               />
 
               <button type="submit" style={styles.button} disabled={loading}>
-                {loading ? "Redirecting..." : "Continue to Payment"}
+                {loading ? "Securing Spot..." : "Secure My Territory"}
               </button>
             </>
           )}
 
           {error && <p style={styles.error}>{error}</p>}
+
         </form>
       </div>
     </div>
