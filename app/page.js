@@ -50,13 +50,14 @@ export default function Home() {
           <Link href="/" style={styles.link}>Home</Link>
           <Link href="/pricing" style={styles.link}>Pricing</Link>
           <Link href="/apply" style={styles.link}>Apply</Link>
-          <Link href="/leads" style={styles.link}>Dashboard</Link>
         </div>
       </nav>
 
       {/* HERO */}
       <section style={styles.hero}>
-        <div style={styles.badge}>RoofFlow — Roofing Lead Booking System</div>
+        <div style={styles.badge}>
+          RoofFlow — Roofing Lead Booking System
+        </div>
 
         <h1 style={styles.h1}>
           Book Roofing Jobs<br />Directly Into Your Calendar
@@ -87,7 +88,7 @@ export default function Home() {
         </div>
 
         <p style={styles.small}>
-          Limited contractors per city to protect lead quality.
+          Limited contractor access per city to protect lead quality.
         </p>
       </section>
 
@@ -107,7 +108,7 @@ export default function Home() {
         <ul>
           <li>We filter homeowner intent before you see them</li>
           <li>We qualify roofing urgency automatically</li>
-          <li>We book confirmed appointments into your pipeline</li>
+          <li>We deliver booked appointments into your pipeline</li>
         </ul>
       </section>
 
