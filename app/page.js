@@ -2,14 +2,19 @@ export default function Home() {
   return (
     <main className="bg-white text-gray-900">
 
-      {/* HERO */}
+      {/* HERO (HOOK + URGENCY) */}
       <section className="max-w-5xl mx-auto px-6 py-24 text-center">
-        <h1 className="text-4xl md:text-5xl font-bold leading-tight">
+
+        <p className="text-sm text-red-600 font-medium">
+          Limited contractor spots available per city
+        </p>
+
+        <h1 className="text-4xl md:text-5xl font-bold leading-tight mt-3">
           Roofing Leads That Turn Into Booked Jobs — Not Clicks
         </h1>
 
         <p className="mt-6 text-lg text-gray-600 max-w-2xl mx-auto">
-          RoofFlow delivers high-intent homeowners actively requesting roofing estimates in your service area. No cold traffic. No shared leads. Just real demand.
+          RoofFlow connects roofing contractors with verified homeowners actively requesting estimates in your service area. No cold traffic. No shared leads. Just real demand.
         </p>
 
         <div className="mt-8 flex gap-4 justify-center flex-wrap">
@@ -24,92 +29,64 @@ export default function Home() {
             href="#how-it-works"
             className="border border-gray-300 px-6 py-3 rounded-lg font-medium"
           >
-            See System
+            See How It Works
           </a>
         </div>
 
         <p className="mt-6 text-xs text-gray-500">
-          Exclusive territories only. Limited contractor access per region.
+          Exclusive territories only • Approval required per region
         </p>
       </section>
 
-      {/* TRUST STRIP */}
-      <section className="bg-gray-50 py-10 px-6 text-center text-gray-600">
-        <p className="max-w-3xl mx-auto">
-          Built for roofing contractors across Canada & the U.S. focused on verified homeowner intent — not paid ads or recycled lead lists.
-        </p>
+      {/* PAIN SECTION */}
+      <section className="bg-gray-50 py-20 px-6 text-center">
+        <h2 className="text-3xl font-bold">
+          Why Most Contractors Waste Their Budget
+        </h2>
+
+        <div className="mt-10 max-w-3xl mx-auto space-y-4 text-gray-600">
+          <p>• Paying for clicks with no real buying intent</p>
+          <p>• Shared leads sent to multiple contractors</p>
+          <p>• Low-quality inquiries that never convert</p>
+        </div>
       </section>
 
-      {/* VALUE LOGIC */}
+      {/* SOLUTION */}
       <section className="max-w-6xl mx-auto px-6 py-20">
         <h2 className="text-3xl font-bold text-center">
-          Why RoofFlow Converts Better Than Traditional Leads
+          The RoofFlow System
         </h2>
 
         <div className="mt-10 grid md:grid-cols-3 gap-6">
 
           <div className="p-6 border rounded-xl">
-            <h3 className="font-semibold mb-2">Intent-Based Demand</h3>
+            <h3 className="font-semibold mb-2">1. Capture Demand</h3>
             <p className="text-gray-600">
-              Every lead comes from homeowners actively requesting roofing estimates.
+              Homeowners actively request roofing estimates in your area.
             </p>
           </div>
 
           <div className="p-6 border rounded-xl">
-            <h3 className="font-semibold mb-2">No Shared Leads</h3>
+            <h3 className="font-semibold mb-2">2. Qualify Leads</h3>
             <p className="text-gray-600">
-              You are not competing with multiple contractors for the same homeowner.
+              Every lead is filtered by intent, urgency, and location.
             </p>
           </div>
 
           <div className="p-6 border rounded-xl">
-            <h3 className="font-semibold mb-2">Appointment Focused</h3>
+            <h3 className="font-semibold mb-2">3. Book Jobs</h3>
             <p className="text-gray-600">
-              We optimize for booked inspections, not raw lead lists.
+              You receive ready-to-book appointments, not raw leads.
             </p>
           </div>
 
         </div>
       </section>
 
-      {/* HOW IT WORKS */}
-      <section id="how-it-works" className="bg-gray-50 py-20 px-6">
-        <div className="max-w-6xl mx-auto">
-          <h2 className="text-3xl font-bold text-center">
-            How RoofFlow Works
-          </h2>
-
-          <div className="mt-10 grid md:grid-cols-3 gap-6">
-
-            <div className="p-6 bg-white border rounded-xl">
-              <h3 className="font-semibold mb-2">1. Capture Demand</h3>
-              <p className="text-gray-600">
-                Homeowners in your area request roofing estimates through our system.
-              </p>
-            </div>
-
-            <div className="p-6 bg-white border rounded-xl">
-              <h3 className="font-semibold mb-2">2. Qualify Leads</h3>
-              <p className="text-gray-600">
-                Each request is filtered by intent, urgency, and location.
-              </p>
-            </div>
-
-            <div className="p-6 bg-white border rounded-xl">
-              <h3 className="font-semibold mb-2">3. You Close Jobs</h3>
-              <p className="text-gray-600">
-                Receive ready-to-book appointments, not unqualified inquiries.
-              </p>
-            </div>
-
-          </div>
-        </div>
-      </section>
-
-      {/* POSITIONING */}
+      {/* COMPARISON */}
       <section className="bg-gray-900 text-white py-20 px-6">
         <h2 className="text-3xl font-bold text-center">
-          The Old Way vs RoofFlow
+          RoofFlow vs Traditional Lead Sources
         </h2>
 
         <div className="mt-10 grid md:grid-cols-3 gap-6">
@@ -117,14 +94,14 @@ export default function Home() {
           <div className="p-6 bg-gray-800 rounded-xl">
             <h3 className="font-semibold mb-2">Google Ads</h3>
             <p className="text-gray-300">
-              You pay for clicks with no guarantee of intent.
+              Pay per click with unpredictable results and low intent.
             </p>
           </div>
 
           <div className="p-6 bg-gray-800 rounded-xl">
             <h3 className="font-semibold mb-2">Lead Brokers</h3>
             <p className="text-gray-300">
-              Same lead sold to multiple contractors.
+              Same lead sold to multiple competing contractors.
             </p>
           </div>
 
@@ -138,17 +115,17 @@ export default function Home() {
         </div>
       </section>
 
-      {/* SOCIAL PROOF */}
-      <section className="max-w-6xl mx-auto px-6 py-20">
-        <h2 className="text-3xl font-bold text-center">
+      {/* PROOF */}
+      <section className="max-w-6xl mx-auto px-6 py-20 text-center">
+        <h2 className="text-3xl font-bold">
           Contractor Results
         </h2>
 
-        <div className="mt-10 grid md:grid-cols-2 gap-6">
+        <div className="mt-10 grid md:grid-cols-2 gap-6 text-left">
 
           <div className="p-6 border rounded-xl">
             <p className="text-gray-700">
-              “We stopped chasing junk leads. Every inquiry now has real buying intent.”
+              “Every lead is real intent. We stopped wasting time on junk inquiries.”
             </p>
             <span className="text-sm text-gray-500 mt-3 block">
               — Roofing Contractor, Alberta
@@ -157,7 +134,7 @@ export default function Home() {
 
           <div className="p-6 border rounded-xl">
             <p className="text-gray-700">
-              “Booked inspections within the first week of joining.”
+              “Booked inspections within the first week.”
             </p>
             <span className="text-sm text-gray-500 mt-3 block">
               — Roofing Business Owner
@@ -167,8 +144,23 @@ export default function Home() {
         </div>
       </section>
 
+      {/* SCARCITY BLOCK (NEW - IMPORTANT) */}
+      <section className="bg-gray-50 py-20 px-6 text-center">
+        <h2 className="text-3xl font-bold">
+          Contractor Availability
+        </h2>
+
+        <p className="mt-4 text-gray-600">
+          We limit access per city to maintain lead quality.
+        </p>
+
+        <div className="mt-6 text-lg font-semibold text-red-600">
+          Only 2 contractor spots remaining in Alberta region
+        </div>
+      </section>
+
       {/* SERVICE AREAS */}
-      <section className="text-center py-20 px-6">
+      <section className="py-20 px-6 text-center">
         <h2 className="text-3xl font-bold">
           Active Service Areas
         </h2>
@@ -181,7 +173,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* PRICING */}
+      {/* PRICING (WITH ANCHORING) */}
       <section className="bg-gray-50 py-20 px-6">
         <h2 className="text-3xl font-bold text-center">
           Simple Monthly Access
@@ -195,7 +187,7 @@ export default function Home() {
           </div>
 
           <div className="p-6 border-2 border-black rounded-xl">
-            <h3 className="font-semibold">Growth</h3>
+            <h3 className="font-semibold">Growth (Recommended)</h3>
             <p className="text-gray-600">$999 / month</p>
           </div>
 
@@ -222,16 +214,16 @@ export default function Home() {
           Ready to stop chasing leads?
         </h2>
 
+        <p className="text-gray-600 mt-3">
+          Get exclusive roofing appointments in your area.
+        </p>
+
         <a
           href="/apply"
           className="mt-6 inline-block bg-black text-white px-8 py-3 rounded-lg"
         >
-          Get Exclusive Roofing Leads
+          Get Access Now
         </a>
-
-        <p className="text-xs text-gray-500 mt-4">
-          Start receiving booked roofing opportunities in your area.
-        </p>
       </section>
 
     </main>
