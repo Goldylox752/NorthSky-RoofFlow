@@ -21,10 +21,13 @@ export default function Home() {
   };
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.__tracked = false;
+    }
+
     const onScroll = () => {
-      const scrollProgress =
-        window.scrollY /
-        (document.documentElement.scrollHeight - window.innerHeight);
+      const height = document.documentElement.scrollHeight - window.innerHeight;
+      const scrollProgress = window.scrollY / height;
 
       if (scrollProgress > 0.5 && !window.__tracked) {
         window.__tracked = true;
@@ -74,7 +77,11 @@ export default function Home() {
             Apply For Territory
           </Link>
 
-          <Link href="/pricing" style={styles.secondaryBtn}>
+          <Link
+            href="/pricing"
+            onClick={() => trackCTA("pricing_click")}
+            style={styles.secondaryBtn}
+          >
             View Pricing
           </Link>
         </div>
@@ -131,112 +138,3 @@ export default function Home() {
     </main>
   );
 }
-
-const styles = {
-  page: {
-    fontFamily: "Inter, sans-serif",
-    background: "#0b1220",
-    color: "#fff",
-    minHeight: "100vh",
-  },
-
-  nav: {
-    display: "flex",
-    justifyContent: "space-between",
-    padding: "20px 30px",
-    borderBottom: "1px solid #1f2a44",
-  },
-
-  logo: {
-    fontWeight: 800,
-  },
-
-  navLinks: {
-    display: "flex",
-    gap: 20,
-  },
-
-  link: {
-    color: "#fff",
-    textDecoration: "none",
-    fontSize: 14,
-    opacity: 0.8,
-  },
-
-  hero: {
-    textAlign: "center",
-    padding: "90px 20px",
-  },
-
-  badge: {
-    fontSize: 12,
-    opacity: 0.7,
-    marginBottom: 10,
-  },
-
-  h1: {
-    fontSize: 52,
-    fontWeight: 900,
-    lineHeight: 1.1,
-  },
-
-  p: {
-    maxWidth: 700,
-    margin: "20px auto",
-    opacity: 0.85,
-  },
-
-  ctaRow: {
-    display: "flex",
-    gap: 12,
-    justifyContent: "center",
-    marginTop: 25,
-  },
-
-  primaryBtn: {
-    background: "#4f46e5",
-    padding: "14px 20px",
-    borderRadius: 10,
-    color: "#fff",
-    textDecoration: "none",
-    fontWeight: 600,
-  },
-
-  secondaryBtn: {
-    background: "transparent",
-    border: "1px solid #4f46e5",
-    padding: "14px 20px",
-    borderRadius: 10,
-    color: "#fff",
-    textDecoration: "none",
-  },
-
-  small: {
-    fontSize: 12,
-    opacity: 0.6,
-    marginTop: 15,
-  },
-
-  card: {
-    maxWidth: 900,
-    margin: "20px auto",
-    background: "#121a2b",
-    padding: 20,
-    borderRadius: 12,
-    border: "1px solid #24314d",
-  },
-
-  cardHighlight: {
-    maxWidth: 900,
-    margin: "20px auto",
-    background: "#1a2240",
-    padding: 20,
-    borderRadius: 12,
-    border: "1px solid #3a4b7a",
-  },
-
-  finalCta: {
-    textAlign: "center",
-    padding: "60px 20px",
-  },
-};
