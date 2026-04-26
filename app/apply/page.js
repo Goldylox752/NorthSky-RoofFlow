@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 
 export default function Apply() {
   const [step, setStep] = useState(1);
@@ -10,32 +10,42 @@ export default function Apply() {
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [lastSubmit, setLastSubmit] = useState(0);
+
   const [website, setWebsite] = useState(""); // honeypot
 
+  const lastSubmitRef = useRef(0);
+
+  // =========================
+  // VALIDATION HELPERS
+  // =========================
   const isValidEmail = (v) => /\S+@\S+\.\S+/.test(v);
 
-  const disposableDomains = new Set([
-    "mailinator.com",
-    "tempmail.com",
-    "10minutemail.com",
-    "guerrillamail.com",
-    "yopmail.com",
-    "trashmail.com",
-  ]);
+  const disposableDomains = useMemo(
+    () =>
+      new Set([
+        "mailinator.com",
+        "tempmail.com",
+        "10minutemail.com",
+        "guerrillamail.com",
+        "yopmail.com",
+        "trashmail.com",
+      ]),
+    []
+  );
 
   const isDisposableEmail = (email) => {
-    const domain = email.split("@")[1];
+    const domain = email?.split("@")[1];
     return disposableDomains.has(domain);
   };
 
-  const normalizePhone = (v) => v.replace(/\D/g, "");
+  const normalizePhone = (v) => v.replace(/\D/g, "").slice(0, 10);
 
   const formatPhone = (value) => {
-    const digits = normalizePhone(value).slice(0, 10);
+    const digits = normalizePhone(value);
 
     if (digits.length <= 3) return digits;
-    if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+    if (digits.length <= 6)
+      return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
 
     return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
   };
@@ -43,23 +53,29 @@ export default function Apply() {
   const cleanedPhone = useMemo(() => normalizePhone(phone), [phone]);
   const isValidPhone = cleanedPhone.length === 10;
 
+  // =========================
+  // LEAD SCORING
+  // =========================
   const leadScore = useMemo(() => {
     let score = 0;
 
     if (isValidEmail(email)) score += 40;
     if (isValidPhone) score += 40;
 
-    const domain = email.split("@")[1];
+    const domain = email?.split("@")[1] || "";
     const trustedDomains = ["gmail.com", "yahoo.com", "hotmail.com"];
 
     if (!trustedDomains.includes(domain)) score += 10;
-    if (email.startsWith("info@") || email.startsWith("admin@")) score += 10;
+    if (email?.startsWith("info@") || email?.startsWith("admin@")) score += 10;
 
     return Math.min(score, 100);
   }, [email, isValidPhone]);
 
   const isQualified = leadScore >= 80;
 
+  // =========================
+  // STEP 1
+  // =========================
   const handleNext = () => {
     setError("");
 
@@ -74,20 +90,27 @@ export default function Apply() {
     setStep(2);
   };
 
+  // =========================
+  // SUBMIT
+  // =========================
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     if (loading) return;
 
     setError("");
     setLoading(true);
 
     const now = Date.now();
-    if (now - lastSubmit < 10000) {
+
+    // rate limit
+    if (now - lastSubmitRef.current < 10000) {
       setLoading(false);
       return setError("Please wait before submitting again.");
     }
-    setLastSubmit(now);
+    lastSubmitRef.current = now;
 
+    // bot protection
     if (website) {
       setLoading(false);
       return setError("Bot detected.");
@@ -112,30 +135,25 @@ export default function Apply() {
         source: "apply_form",
       };
 
-      // Lead capture (non-blocking)
-      try {
-        await fetch("/api/leads/create", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-      } catch (err) {
-        console.warn("Lead capture failed:", err);
-      }
+      // =========================
+      // LEAD (non-blocking)
+      // =========================
+      fetch("/api/leads/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }).catch(() => {});
 
-      // Checkout
+      // =========================
+      // CHECKOUT
+      // =========================
       const res = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
-      let data;
-      try {
-        data = await res.json();
-      } catch {
-        throw new Error("Invalid server response");
-      }
+      const data = await res.json().catch(() => null);
 
       if (!res.ok) {
         throw new Error(data?.error || "Checkout failed");
@@ -146,22 +164,25 @@ export default function Apply() {
       }
 
       window.location.href = data.url;
-
     } catch (err) {
       setError(err.message || "Something went wrong.");
       setLoading(false);
     }
   };
 
+  // =========================
+  // UI
+  // =========================
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+
       <div className="w-full max-w-xl bg-white rounded-2xl shadow-md p-8">
 
         {/* Honeypot */}
         <input
           value={website}
           onChange={(e) => setWebsite(e.target.value)}
-          style={{ display: "none" }}
+          className="hidden"
           tabIndex={-1}
           autoComplete="off"
         />
@@ -174,12 +195,19 @@ export default function Apply() {
           Limited contractor access per territory.
         </p>
 
-        <p className={`mt-3 text-sm font-bold ${isQualified ? "text-green-600" : "text-red-500"}`}>
+        <p
+          className={`mt-3 text-sm font-bold ${
+            isQualified ? "text-green-600" : "text-red-500"
+          }`}
+        >
           {isQualified ? "Pre-Qualified" : "Qualification Required"}
         </p>
 
-        <p className="text-xs text-gray-500 mt-1">Step {step} of 2</p>
+        <p className="text-xs text-gray-500 mt-1">
+          Step {step} of 2
+        </p>
 
+        {/* PLAN */}
         <div className="mt-5">
           <select
             value={plan}
