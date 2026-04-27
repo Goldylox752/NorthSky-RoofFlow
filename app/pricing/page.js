@@ -27,14 +27,32 @@ export default function Pricing() {
   return (
     <main className="bg-white text-gray-900">
 
+      {/* URGENCY BANNER */}
+      <div className="bg-black text-white text-center py-3 text-sm">
+        ⚠️ Only 1 contractor per territory — availability updates in real time
+      </div>
+
       {/* HEADER */}
-      <section className="max-w-5xl mx-auto px-6 py-20 text-center">
+      <section className="max-w-5xl mx-auto px-6 py-16 text-center">
         <h1 className="text-4xl font-bold">
-          Simple Monthly Access
+          Exclusive Roofing Leads by Territory
         </h1>
 
         <p className="mt-4 text-gray-600">
-          Exclusive roofing lead access per territory. No shared leads.
+          Locked territories. No shared leads. High-intent homeowners only.
+        </p>
+
+        <div className="mt-6 text-sm text-gray-500">
+          🔥 Avg ROI: 3–7x per closed job <br />
+          ⚡ Leads delivered instantly <br />
+          📍 One contractor per area only
+        </div>
+      </section>
+
+      {/* SOCIAL PROOF */}
+      <section className="max-w-5xl mx-auto px-6 pb-6 text-center">
+        <p className="text-sm text-gray-500">
+          Trusted by contractors scaling consistent high-ticket roofing jobs across Western Canada
         </p>
       </section>
 
@@ -53,8 +71,12 @@ export default function Pricing() {
             onClick={() => subscribe("price_STARTER_ID")}
             className="w-full bg-black text-white py-2 rounded-lg"
           >
-            Start Starter
+            Secure Territory → Starter
           </button>
+
+          <p className="text-xs text-gray-500 mt-2">
+            Cancel anytime. Keep all leads generated during subscription.
+          </p>
         </div>
 
         {/* GROWTH */}
@@ -69,8 +91,12 @@ export default function Pricing() {
             onClick={() => subscribe("price_GROWTH_ID")}
             className="w-full bg-black text-white py-2 rounded-lg"
           >
-            Start Growth
+            Get More Jobs → Growth
           </button>
+
+          <p className="text-xs text-gray-500 mt-2">
+            Cancel anytime. Keep all leads generated during subscription.
+          </p>
         </div>
 
         {/* DOMINATION */}
@@ -85,12 +111,15 @@ export default function Pricing() {
             onClick={() => subscribe("price_DOMINATION_ID")}
             className="w-full bg-black text-white py-2 rounded-lg"
           >
-            Start Domination
+            Lock Market → Domination
           </button>
+
+          <p className="text-xs text-gray-500 mt-2">
+            Cancel anytime. Full territory exclusivity while active.
+          </p>
         </div>
 
       </section>
-
     </main>
   );
 }
