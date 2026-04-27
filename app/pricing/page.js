@@ -57,7 +57,7 @@ export default function Pricing() {
       </section>
 
       {/* PRICING */}
-      <section className="max-w-6xl mx-auto px-6 pb-24 grid md:grid-cols-3 gap-6">
+      <section className="max-w-6xl mx-auto px-6 pb-16 grid md:grid-cols-3 gap-6">
 
         {/* STARTER */}
         <div className="border rounded-xl p-6">
@@ -120,6 +120,55 @@ export default function Pricing() {
         </div>
 
       </section>
+
+      {/* 💰 PAY-PER-LEAD UPSELL SECTION (NEW) */}
+      <section className="max-w-5xl mx-auto px-6 pb-20 text-center">
+
+        <h2 className="text-2xl font-bold">
+          Not ready for a subscription?
+        </h2>
+
+        <p className="text-gray-600 mt-2">
+          Buy individual high-intent roofing leads. No commitment. Instant access.
+        </p>
+
+        <div className="grid md:grid-cols-3 gap-6 mt-10">
+
+          <div className="border rounded-xl p-6">
+            <h3 className="font-bold">Hot Lead</h3>
+            <p className="text-gray-600">$49</p>
+            <p className="text-xs text-gray-500 mt-2">
+              High intent homeowner inquiry
+            </p>
+          </div>
+
+          <div className="border rounded-xl p-6">
+            <h3 className="font-bold">Verified Lead</h3>
+            <p className="text-gray-600">$99</p>
+            <p className="text-xs text-gray-500 mt-2">
+              Confirmed contact + project intent
+            </p>
+          </div>
+
+          <div className="border rounded-xl p-6">
+            <h3 className="font-bold">Exclusive Lead</h3>
+            <p className="text-gray-600">$149</p>
+            <p className="text-xs text-gray-500 mt-2">
+              Only sent to one contractor
+            </p>
+          </div>
+
+        </div>
+
+        <button
+          onClick={() => (window.location.href = "/buy-leads")}
+          className="mt-8 bg-gray-900 text-white px-6 py-3 rounded-lg"
+        >
+          Browse Single Leads
+        </button>
+
+      </section>
+
     </main>
   );
 }
