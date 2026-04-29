@@ -4,6 +4,7 @@ import { useState, useMemo, useRef } from "react";
 
 export default function Apply() {
   const [step, setStep] = useState(1);
+
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [plan, setPlan] = useState("growth");
@@ -11,15 +12,13 @@ export default function Apply() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const [website, setWebsite] = useState(""); // honeypot
+  const [honeypot, setHoneypot] = useState("");
 
   const lastSubmitRef = useRef(0);
 
   // =========================
-  // VALIDATION HELPERS
+  // CONFIG
   // =========================
-  const isValidEmail = (v) => /\S+@\S+\.\S+/.test(v);
-
   const disposableDomains = useMemo(
     () =>
       new Set([
@@ -33,12 +32,24 @@ export default function Apply() {
     []
   );
 
-  const isDisposableEmail = (email) => {
-    const domain = email?.split("@")[1];
-    return disposableDomains.has(domain);
-  };
+  const trustedDomains = useMemo(
+    () => new Set(["gmail.com", "yahoo.com", "hotmail.com"]),
+    []
+  );
+
+  // =========================
+  // HELPERS
+  // =========================
+  const isValidEmail = (v) => /\S+@\S+\.\S+/.test(v);
+
+  const getEmailDomain = (email) => email?.split("@")[1] || "";
+
+  const isDisposableEmail = (email) =>
+    disposableDomains.has(getEmailDomain(email));
 
   const normalizePhone = (v) => v.replace(/\D/g, "").slice(0, 10);
+
+  const isValidPhone = (phone) => normalizePhone(phone).length === 10;
 
   const formatPhone = (value) => {
     const digits = normalizePhone(value);
@@ -51,30 +62,28 @@ export default function Apply() {
   };
 
   const cleanedPhone = useMemo(() => normalizePhone(phone), [phone]);
-  const isValidPhone = cleanedPhone.length === 10;
 
   // =========================
-  // LEAD SCORING
+  // LEAD SCORE
   // =========================
   const leadScore = useMemo(() => {
     let score = 0;
 
     if (isValidEmail(email)) score += 40;
-    if (isValidPhone) score += 40;
+    if (isValidPhone(phone)) score += 40;
 
-    const domain = email?.split("@")[1] || "";
-    const trustedDomains = ["gmail.com", "yahoo.com", "hotmail.com"];
+    const domain = getEmailDomain(email);
 
-    if (!trustedDomains.includes(domain)) score += 10;
-    if (email?.startsWith("info@") || email?.startsWith("admin@")) score += 10;
+    if (!trustedDomains.has(domain)) score += 10;
+    if (email.startsWith("info@") || email.startsWith("admin@")) score += 10;
 
     return Math.min(score, 100);
-  }, [email, isValidPhone]);
+  }, [email, phone, trustedDomains]);
 
   const isQualified = leadScore >= 80;
 
   // =========================
-  // STEP 1
+  // STEP 1 VALIDATION
   // =========================
   const handleNext = () => {
     setError("");
@@ -84,7 +93,7 @@ export default function Apply() {
     }
 
     if (isDisposableEmail(email)) {
-      return setError("Disposable emails are not allowed.");
+      return setError("Temporary emails are not allowed.");
     }
 
     setStep(2);
@@ -101,22 +110,28 @@ export default function Apply() {
     setError("");
     setLoading(true);
 
+    // =========================
+    // RATE LIMIT
+    // =========================
     const now = Date.now();
-
-    // rate limit
     if (now - lastSubmitRef.current < 10000) {
       setLoading(false);
       return setError("Please wait before submitting again.");
     }
     lastSubmitRef.current = now;
 
-    // bot protection
-    if (website) {
+    // =========================
+    // BOT CHECK
+    // =========================
+    if (honeypot) {
       setLoading(false);
       return setError("Bot detected.");
     }
 
-    if (!isValidPhone) {
+    // =========================
+    // VALIDATION
+    // =========================
+    if (!isValidPhone(phone)) {
       setLoading(false);
       return setError("Enter a valid phone number.");
     }
@@ -136,7 +151,7 @@ export default function Apply() {
       };
 
       // =========================
-      // LEAD (non-blocking)
+      // LEAD (async, non-blocking)
       // =========================
       fetch("/api/leads/create", {
         method: "POST",
@@ -155,13 +170,8 @@ export default function Apply() {
 
       const data = await res.json().catch(() => null);
 
-      if (!res.ok) {
-        throw new Error(data?.error || "Checkout failed");
-      }
-
-      if (!data?.url) {
-        throw new Error("Missing checkout URL");
-      }
+      if (!res.ok) throw new Error(data?.error || "Checkout failed");
+      if (!data?.url) throw new Error("Missing checkout URL");
 
       window.location.href = data.url;
     } catch (err) {
@@ -180,11 +190,11 @@ export default function Apply() {
 
         {/* Honeypot */}
         <input
-          value={website}
-          onChange={(e) => setWebsite(e.target.value)}
+          value={honeypot}
+          onChange={(e) => setHoneypot(e.target.value)}
           className="hidden"
-          tabIndex={-1}
           autoComplete="off"
+          tabIndex={-1}
         />
 
         <h1 className="text-2xl font-bold">
