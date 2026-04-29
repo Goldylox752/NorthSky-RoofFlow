@@ -10,78 +10,78 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// --------------------
+// =====================
 // ENV
-// --------------------
+// =====================
 const {
   OPENAI_API_KEY,
   TWILIO_SID,
   TWILIO_AUTH_TOKEN,
   TWILIO_PHONE,
   BUSINESS_PHONE,
-  PORT
+  PORT,
 } = process.env;
 
-// --------------------
+// =====================
 // CLIENTS
-// --------------------
+// =====================
 const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
-const sms = twilio(TWILIO_SID, TWILIO_AUTH_TOKEN);
+const smsClient = twilio(TWILIO_SID, TWILIO_AUTH_TOKEN);
 
-// --------------------
+// =====================
 // MEMORY STORE (replace with DB later)
-// --------------------
+// =====================
 const leads = new Map();
 
-/*
-lead structure:
-{
-  id,
-  name,
-  phone,
-  jobType,
-  location,
-  status: "new | contacted | hot | dead",
-  messages: [],
-  createdAt,
-  lastContactAt,
-  followUpStage: 0
-}
-*/
+// =====================
+// LEAD STRUCTURE
+// =====================
+// {
+//   id,
+//   name,
+//   phone,
+//   jobType,
+//   location,
+//   status,
+//   messages,
+//   createdAt,
+//   lastContactAt,
+//   followUpStage
+// }
 
-// --------------------
+// =====================
 // HELPERS
-// --------------------
-function createLeadId(phone) {
-  return phone.replace(/\D/g, "");
-}
+// =====================
+const normalizePhone = (phone) => phone.replace(/\D/g, "");
 
-// --------------------
+const createLeadId = (phone) => normalizePhone(phone);
+
+// =====================
 // AI ENGINE
-// --------------------
-async function aiReply(lead, stage = 0) {
-  const prompts = [
-    "First response: short intro + ask ONE question",
-    "Follow-up: polite check-in, no pressure",
-    "Third follow-up: urgency + offer estimate reminder",
-    "Final follow-up: last attempt, friendly close"
+// =====================
+async function generateAIMessage(lead, stage = 0) {
+  const stages = [
+    "First response: introduce yourself and ask ONE clear question.",
+    "Follow-up: polite check-in, no pressure.",
+    "Third follow-up: add urgency and mention limited availability.",
+    "Final follow-up: friendly last message, close loop."
   ];
 
   const prompt = `
-You are a roofing sales assistant.
-
-Stage: ${stage}
-Instruction: ${prompts[stage] || prompts[0]}
+You are an AI roofing sales assistant.
 
 Rules:
 - 2–3 sentences max
 - ONE question only
-- Natural human tone
+- Human, natural tone
 - Focus: roofing repair, replacement, storm damage
 
-Lead:
+Stage: ${stage}
+Instruction: ${stages[stage] || stages[0]}
+
+Lead Info:
 Name: ${lead.name}
-Job: ${lead.jobType}
+Job Type: ${lead.jobType}
 Location: ${lead.location}
 `;
 
@@ -94,38 +94,36 @@ Location: ${lead.location}
   return res.choices[0].message.content;
 }
 
-// --------------------
+// =====================
 // SMS SENDER
-// --------------------
-async function sendSMS(to, body) {
-  return sms.messages.create({
+// =====================
+async function sendSMS(to, message) {
+  return smsClient.messages.create({
     from: TWILIO_PHONE,
     to,
-    body,
+    body: message,
   });
 }
 
-// --------------------
-// SAVE / UPDATE LEAD
-// --------------------
+// =====================
+// SAVE LEAD
+// =====================
 function saveLead(lead) {
   leads.set(lead.id, lead);
 }
 
-// --------------------
+// =====================
 // FOLLOW-UP SYSTEM
-// --------------------
+// =====================
 async function scheduleFollowUp(leadId, delayMs) {
   setTimeout(async () => {
     const lead = leads.get(leadId);
     if (!lead) return;
-
-    // stop if already closed/hot
     if (lead.status === "dead") return;
 
     lead.followUpStage += 1;
 
-    const message = await aiReply(lead, lead.followUpStage);
+    const message = await generateAIMessage(lead, lead.followUpStage);
 
     await sendSMS(lead.phone, message);
 
@@ -137,34 +135,40 @@ async function scheduleFollowUp(leadId, delayMs) {
     });
 
     lead.lastContactAt = new Date();
-
     saveLead(lead);
 
-    // chain next follow-up
+    // chain follow-ups
+    const followUpSchedule = [
+      24,   // 1 day
+      48,   // 2 days
+      72,   // 3 days
+      168,  // 7 days
+    ];
+
     if (lead.followUpStage < 3) {
       scheduleFollowUp(
         lead.id,
-        [0, 24, 72, 168][lead.followUpStage] * 60 * 60 * 1000
+        followUpSchedule[lead.followUpStage] * 60 * 60 * 1000
       );
     }
 
   }, delayMs);
 }
 
-// --------------------
+// =====================
 // LEAD ENTRY POINT
-// --------------------
+// =====================
 app.post("/lead", async (req, res) => {
   try {
     const { name, phone, jobType, location } = req.body;
 
-    if (!phone || !name) {
-      return res.status(400).json({ error: "Missing fields" });
+    if (!name || !phone) {
+      return res.status(400).json({ error: "Missing required fields" });
     }
 
     const id = createLeadId(phone);
 
-    let lead = {
+    const lead = {
       id,
       name,
       phone,
@@ -177,13 +181,11 @@ app.post("/lead", async (req, res) => {
       followUpStage: 0,
     };
 
-    // store lead
     saveLead(lead);
 
-    // AI first message
-    const message = await aiReply(lead, 0);
+    // INITIAL AI MESSAGE
+    const message = await generateAIMessage(lead, 0);
 
-    // send SMS
     await sendSMS(phone, message);
 
     lead.messages.push({
@@ -201,36 +203,36 @@ app.post("/lead", async (req, res) => {
     if (BUSINESS_PHONE) {
       await sendSMS(
         BUSINESS_PHONE,
-        `New Lead: ${name} | ${phone} | ${jobType}`
+        `New Lead → ${name} | ${phone} | ${jobType || "N/A"}`
       );
     }
 
     // start follow-up chain
-    scheduleFollowUp(id, 24 * 60 * 60 * 1000); // 24h
+    scheduleFollowUp(id, 24 * 60 * 60 * 1000);
 
     res.json({
       success: true,
-      message: "Lead captured + AI activated",
+      message: "AI lead system activated",
     });
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Server error" });
+    console.error("LEAD ERROR:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// --------------------
-// VIEW LEADS (DEBUG TOOL)
-// --------------------
+// =====================
+// DEBUG ENDPOINT
+// =====================
 app.get("/leads", (req, res) => {
   res.json([...leads.values()]);
 });
 
-// --------------------
-// SERVER START
-// --------------------
+// =====================
+// START SERVER
+// =====================
 const PORT_NUMBER = PORT || 5000;
 
 app.listen(PORT_NUMBER, () => {
-  console.log(`🚀 RoofFlow AI v10 running on port ${PORT_NUMBER}`);
+  console.log(`🚀 Roof Flow AI running on port ${PORT_NUMBER}`);
 });
