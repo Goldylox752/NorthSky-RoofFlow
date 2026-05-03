@@ -18,7 +18,7 @@ const {
   TWILIO_PHONE,
   STRIPE_SECRET_KEY,
   FRONTEND_URL,
-  OLLAMA_URL, // 👈 ADD THIS (IMPORTANT)
+  OLLAMA_URL,
 } = process.env;
 
 // =====================
@@ -38,7 +38,7 @@ app.use(cors({ origin: FRONTEND_URL || "*" }));
 app.use(express.json());
 
 // =====================
-// OLLAMA FUNCTION (FIXED FOR VPS)
+// OLLAMA AI (CLOSER ENGINE)
 // =====================
 async function askOllama(prompt) {
   try {
@@ -48,7 +48,11 @@ async function askOllama(prompt) {
       body: JSON.stringify({
         model: "llama3",
         messages: [
-          { role: "system", content: "Short helpful assistant." },
+          {
+            role: "system",
+            content:
+              "You are a high-conversion roofing sales closer. Be short, direct, and always push toward booking an inspection.",
+          },
           { role: "user", content: prompt },
         ],
         stream: false,
@@ -56,12 +60,10 @@ async function askOllama(prompt) {
     });
 
     const data = await res.json();
-    return data?.message?.content || "No response";
+    return data?.message?.content || "When would you like an inspection?";
   } catch (err) {
     console.error("Ollama error:", err.message);
-
-    // fallback so SMS NEVER breaks
-    return "Thanks for your message — we’ll get back shortly.";
+    return "Are you available for a quick roof inspection this week?";
   }
 }
 
@@ -105,10 +107,10 @@ function sendDrip(phone, messages) {
 }
 
 // =====================
-// HEALTH
+// HEALTH CHECK
 // =====================
 app.get("/", (req, res) => {
-  res.send("🚀 RoofFlow API LIVE (Ollama + Safe Mode)");
+  res.send("🚀 RoofFlow API LIVE (Ollama Closer Mode)");
 });
 
 // =====================
@@ -133,7 +135,9 @@ app.post("/api/checkout", async (req, res) => {
         {
           price_data: {
             currency: "usd",
-            product_data: { name: `RoofFlow AI - ${plan}` },
+            product_data: {
+              name: `RoofFlow AI - ${plan}`,
+            },
             unit_amount: PLANS[plan],
           },
           quantity: 1,
@@ -146,13 +150,13 @@ app.post("/api/checkout", async (req, res) => {
 
     res.json({ url: session.url });
   } catch (err) {
-    console.error(err);
+    console.error("Checkout error:", err.message);
     res.status(500).json({ error: "Checkout failed" });
   }
 });
 
 // =====================
-// LEAD
+// LEAD SYSTEM
 // =====================
 app.post("/api/lead", async (req, res) => {
   try {
@@ -172,13 +176,13 @@ app.post("/api/lead", async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
+    console.error("Lead error:", err.message);
     res.status(500).json({ error: "Lead error" });
   }
 });
 
 // =====================
-// SMS BOT (OLLAMA)
+// SMS BOT (CLOSER AI)
 // =====================
 app.post("/sms", async (req, res) => {
   try {
