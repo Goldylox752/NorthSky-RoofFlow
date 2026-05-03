@@ -44,14 +44,14 @@ for (const key of required) {
 }
 
 // =====================
-// INIT SERVICES
+// SERVICES
 // =====================
 const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 const twilioClient = twilio(TWILIO_SID, TWILIO_AUTH_TOKEN);
 const stripe = new Stripe(STRIPE_SECRET_KEY);
 
 // =====================
-// MIDDLEWARE ORDER (IMPORTANT)
+// MIDDLEWARE (IMPORTANT ORDER)
 // =====================
 app.use(cors());
 app.use(express.json());
@@ -66,14 +66,14 @@ const PLANS = {
 };
 
 // =====================
-// DRIP SYSTEM
+// DRIP SYSTEM (MVP VERSION)
 // =====================
 function dripSequence() {
   return [
     { delay: 0, text: "Thanks — we received your request." },
-    { delay: 60 * 60 * 1000, text: "We only take limited contractors per area." },
-    { delay: 24 * 60 * 60 * 1000, text: "Still want exclusive roofing leads?" },
-    { delay: 48 * 60 * 60 * 1000, text: "Final reminder — spots are filling fast." },
+    { delay: 3600000, text: "We only accept limited contractors per area." },
+    { delay: 86400000, text: "Still interested in exclusive roofing leads?" },
+    { delay: 172800000, text: "Final reminder — spots are almost full." },
   ];
 }
 
@@ -87,7 +87,7 @@ function sendDrip(phone, messages) {
           to: phone,
         });
 
-        console.log(`📤 Drip ${i + 1} sent to ${phone}`);
+        console.log(`📤 Drip ${i + 1} sent → ${phone}`);
       } catch (err) {
         console.error("Drip error:", err.message);
       }
@@ -103,8 +103,8 @@ app.get("/", (req, res) => {
 <!DOCTYPE html>
 <html>
 <head>
-<title>AI Roofing Leads</title>
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>RoofFlow AI Leads</title>
 
 <style>
 body {
@@ -115,20 +115,17 @@ body {
 }
 
 .container {
-  max-width:1000px;
+  max-width:900px;
   margin:auto;
   padding:80px 20px;
   text-align:center;
 }
 
-h1 {
-  font-size:48px;
-}
+h1 { font-size:44px; }
 
 p {
   color:#cbd5e1;
   font-size:18px;
-  line-height:1.6;
 }
 
 .card {
@@ -141,28 +138,12 @@ p {
 
 .btn {
   margin-top:20px;
-  padding:14px 24px;
+  padding:14px 22px;
   background:#22c55e;
   border:none;
-  color:black;
+  border-radius:10px;
   font-weight:bold;
-  border-radius:8px;
   cursor:pointer;
-  font-size:16px;
-}
-
-.btn:hover {
-  opacity:0.9;
-}
-
-.badge {
-  display:inline-block;
-  background:#1f2937;
-  padding:8px 14px;
-  border-radius:20px;
-  font-size:12px;
-  color:#a5b4fc;
-  margin-bottom:20px;
 }
 </style>
 </head>
@@ -171,26 +152,23 @@ p {
 
 <div class="container">
 
-  <div class="badge">🚀 AI POWERED LEAD GENERATION</div>
-
-  <h1>Exclusive Roofing Leads<br/>Delivered to Your Phone</h1>
+  <h1>Exclusive Roofing Leads<br/>Delivered Instantly</h1>
 
   <p>
-    We generate high-intent homeowner leads and deliver them directly to contractors via SMS using AI automation.
-    No ads, no cold calling, no wasted time.
+    AI finds homeowners actively requesting roofing estimates and sends them directly to you via SMS.
   </p>
 
   <div class="card">
-    <h2>💰 What You Get</h2>
+    <h2>What You Get</h2>
     <p>
-      ✔ Exclusive leads in your area<br/>
-      ✔ Instant SMS notifications<br/>
-      ✔ AI follow-up system<br/>
-      ✔ Automated lead qualification<br/>
+      ✔ Exclusive leads<br/>
+      ✔ No shared contractors<br/>
+      ✔ AI qualification<br/>
+      ✔ SMS delivery system
     </p>
 
     <button class="btn" onclick="checkout('growth')">
-      Get Access Now
+      Get Access
     </button>
   </div>
 
@@ -199,12 +177,12 @@ p {
 <script>
 async function checkout(plan) {
   const res = await fetch('/api/checkout', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
       plan,
-      email: 'test@test.com',
-      phone: '0000000000'
+      email:'test@test.com',
+      phone:'0000000000'
     })
   });
 
@@ -232,19 +210,16 @@ app.post("/api/checkout", async (req, res) => {
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       payment_method_types: ["card"],
-
-      line_items: [
-        {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: `AI Roofing Leads - ${plan}`,
-            },
-            unit_amount: PLANS[plan],
+      line_items: [{
+        price_data: {
+          currency: "usd",
+          product_data: {
+            name: `RoofFlow AI - ${plan}`,
           },
-          quantity: 1,
+          unit_amount: PLANS[plan],
         },
-      ],
+        quantity: 1,
+      }],
 
       success_url: `${req.headers.origin}`,
       cancel_url: `${req.headers.origin}`,
@@ -253,6 +228,7 @@ app.post("/api/checkout", async (req, res) => {
     });
 
     res.json({ url: session.url });
+
   } catch (err) {
     console.error("Stripe error:", err);
     res.status(500).json({ error: "Checkout failed" });
@@ -260,7 +236,7 @@ app.post("/api/checkout", async (req, res) => {
 });
 
 // =====================
-// STRIPE WEBHOOK (FIXED)
+// STRIPE WEBHOOK (SAFE VERSION)
 // =====================
 app.post(
   "/api/stripe/webhook",
@@ -270,20 +246,17 @@ app.post(
 
     try {
       event = JSON.parse(req.body.toString());
-    } catch (err) {
+    } catch {
       return res.status(400).send("Invalid webhook");
     }
 
     if (event.type === "checkout.session.completed") {
       const session = event.data.object;
-
       const phone = session.metadata?.phone;
 
       console.log("💰 PAYMENT SUCCESS:", session.metadata);
 
-      if (phone) {
-        sendDrip(phone, dripSequence());
-      }
+      if (phone) sendDrip(phone, dripSequence());
     }
 
     res.json({ received: true });
@@ -298,7 +271,7 @@ app.post("/api/lead", async (req, res) => {
     const { phone } = req.body;
 
     await twilioClient.messages.create({
-      body: "Thanks — we’ll be in touch shortly.",
+      body: "Thanks — we’ll follow up shortly.",
       from: TWILIO_PHONE,
       to: phone,
     });
@@ -306,6 +279,7 @@ app.post("/api/lead", async (req, res) => {
     sendDrip(phone, dripSequence());
 
     res.json({ success: true });
+
   } catch (err) {
     res.status(500).json({ error: "Lead error" });
   }
@@ -329,7 +303,8 @@ app.post("/sms", async (req, res) => {
       ],
     });
 
-    const reply = ai.choices?.[0]?.message?.content || "Thanks — we’ll follow up.";
+    const reply =
+      ai.choices?.[0]?.message?.content || "Thanks — we’ll follow up.";
 
     await twilioClient.messages.create({
       body: reply,
@@ -338,6 +313,7 @@ app.post("/sms", async (req, res) => {
     });
 
     res.sendStatus(200);
+
   } catch (err) {
     console.error(err);
     res.sendStatus(500);
@@ -348,5 +324,5 @@ app.post("/sms", async (req, res) => {
 // START SERVER
 // =====================
 app.listen(PORT || 3000, () => {
-  console.log("🚀 AI Lead System running");
+  console.log("🚀 RoofFlow AI System Running");
 });
