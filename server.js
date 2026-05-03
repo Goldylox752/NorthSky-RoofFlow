@@ -8,7 +8,6 @@ if (process.env.NODE_ENV !== "production") {
 const express = require("express");
 const cors = require("cors");
 const twilio = require("twilio");
-const OpenAI = require("openai");
 const Stripe = require("stripe");
 
 const app = express();
@@ -17,36 +16,33 @@ const app = express();
 // ENV
 // =====================
 const {
-  OPENAI_API_KEY,
   TWILIO_SID,
   TWILIO_AUTH_TOKEN,
   TWILIO_PHONE,
   STRIPE_SECRET_KEY,
   FRONTEND_URL,
-  PORT,
 } = process.env;
 
 // =====================
-// SAFETY CHECK
+// SAFETY CHECK (Vercel-safe)
 // =====================
-[
-  "OPENAI_API_KEY",
+const requiredEnv = [
   "TWILIO_SID",
   "TWILIO_AUTH_TOKEN",
   "TWILIO_PHONE",
   "STRIPE_SECRET_KEY",
   "FRONTEND_URL",
-].forEach((key) => {
+];
+
+requiredEnv.forEach((key) => {
   if (!process.env[key]) {
-    console.error("❌ Missing env:", key);
-    process.exit(1);
+    console.warn("⚠️ Missing env:", key);
   }
 });
 
 // =====================
 // INIT SERVICES
 // =====================
-const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 const twilioClient = twilio(TWILIO_SID, TWILIO_AUTH_TOKEN);
 const stripe = new Stripe(STRIPE_SECRET_KEY);
 
@@ -55,6 +51,32 @@ const stripe = new Stripe(STRIPE_SECRET_KEY);
 // =====================
 app.use(cors({ origin: FRONTEND_URL }));
 app.use(express.json());
+
+// =====================
+// OLLAMA AI FUNCTION
+// =====================
+async function askOllama(prompt) {
+  try {
+    const res = await fetch("http://localhost:11434/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "llama3",
+        messages: [
+          { role: "system", content: "You are a short, helpful assistant." },
+          { role: "user", content: prompt },
+        ],
+        stream: false,
+      }),
+    });
+
+    const data = await res.json();
+    return data?.message?.content || "Sorry, no response.";
+  } catch (err) {
+    console.error("Ollama error:", err.message);
+    return "AI temporarily unavailable.";
+  }
+}
 
 // =====================
 // PRICING
@@ -97,7 +119,7 @@ function sendDrip(phone, messages) {
 // HEALTH CHECK
 // =====================
 app.get("/", (req, res) => {
-  res.send("🚀 RoofFlow API LIVE");
+  res.send("🚀 RoofFlow API LIVE (Ollama Mode)");
 });
 
 // =====================
@@ -109,7 +131,7 @@ app.post("/api/event", (req, res) => {
 });
 
 // =====================
-// CHECKOUT
+// CHECKOUT (Stripe)
 // =====================
 app.post("/api/checkout", async (req, res) => {
   try {
@@ -141,34 +163,38 @@ app.post("/api/checkout", async (req, res) => {
 
     res.json({ url: session.url });
   } catch (err) {
-    console.error(err);
+    console.error("Checkout error:", err.message);
     res.status(500).json({ error: "Checkout failed" });
   }
 });
 
 // =====================
-// WEBHOOK (NO JSON MIDDLEWARE ISSUE)
+// STRIPE WEBHOOK
 // =====================
-app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), (req, res) => {
-  let event;
+app.post(
+  "/api/stripe/webhook",
+  express.raw({ type: "application/json" }),
+  (req, res) => {
+    let event;
 
-  try {
-    event = JSON.parse(req.body.toString());
-  } catch {
-    return res.status(400).send("Invalid webhook");
+    try {
+      event = JSON.parse(req.body.toString());
+    } catch {
+      return res.status(400).send("Invalid webhook");
+    }
+
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object;
+      const phone = session.metadata?.phone;
+
+      console.log("💰 PAYMENT:", session.metadata);
+
+      if (phone) sendDrip(phone, dripSequence());
+    }
+
+    res.json({ received: true });
   }
-
-  if (event.type === "checkout.session.completed") {
-    const session = event.data.object;
-    const phone = session.metadata?.phone;
-
-    console.log("💰 PAYMENT:", session.metadata);
-
-    if (phone) sendDrip(phone, dripSequence());
-  }
-
-  res.json({ received: true });
-});
+);
 
 // =====================
 // LEADS
@@ -189,13 +215,13 @@ app.post("/api/lead", async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
+    console.error("Lead error:", err.message);
     res.status(500).json({ error: "Lead error" });
   }
 });
 
 // =====================
-// SMS BOT
+// SMS BOT (OLLAMA AI)
 // =====================
 app.post("/sms", async (req, res) => {
   try {
@@ -204,16 +230,7 @@ app.post("/sms", async (req, res) => {
 
     if (!msg || !from) return res.sendStatus(200);
 
-    const ai = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: "Short helpful assistant." },
-        { role: "user", content: msg },
-      ],
-    });
-
-    const reply =
-      ai.choices?.[0]?.message?.content || "Thanks — we’ll follow up.";
+    const reply = await askOllama(msg);
 
     await twilioClient.messages.create({
       body: reply,
@@ -223,8 +240,8 @@ app.post("/sms", async (req, res) => {
 
     res.sendStatus(200);
   } catch (err) {
-    console.error(err);
-    res.sendStatus(500);
+    console.error("SMS error:", err.message);
+    res.sendStatus(200); // never break webhook
   }
 });
 
