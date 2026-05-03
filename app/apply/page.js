@@ -13,7 +13,6 @@ export default function Apply() {
   const [loading, setLoading] = useState(false);
 
   const [honeypot, setHoneypot] = useState("");
-
   const lastSubmitRef = useRef(0);
 
   // =========================
@@ -64,7 +63,7 @@ export default function Apply() {
   const cleanedPhone = useMemo(() => normalizePhone(phone), [phone]);
 
   // =========================
-  // LEAD SCORE
+  // LEAD SCORE (soft signal only)
   // =========================
   const leadScore = useMemo(() => {
     let score = 0;
@@ -75,15 +74,15 @@ export default function Apply() {
     const domain = getEmailDomain(email);
 
     if (!trustedDomains.has(domain)) score += 10;
-    if (email.startsWith("info@") || email.startsWith("admin@")) score += 10;
+    if (email.startsWith("info@") || email.startsWith("sales@")) score += 10;
 
     return Math.min(score, 100);
   }, [email, phone, trustedDomains]);
 
-  const isQualified = leadScore >= 80;
+  const isHighIntent = leadScore >= 80;
 
   // =========================
-  // STEP 1 VALIDATION
+  // STEP 1
   // =========================
   const handleNext = () => {
     setError("");
@@ -110,35 +109,25 @@ export default function Apply() {
     setError("");
     setLoading(true);
 
-    // =========================
     // RATE LIMIT
-    // =========================
     const now = Date.now();
-    if (now - lastSubmitRef.current < 10000) {
+    if (now - lastSubmitRef.current < 8000) {
       setLoading(false);
-      return setError("Please wait before submitting again.");
+      return setError("Please wait a moment before submitting again.");
     }
     lastSubmitRef.current = now;
 
-    // =========================
-    // BOT CHECK
-    // =========================
+    // BOT CHECK (soft block)
     if (honeypot) {
+      console.warn("Bot detected");
       setLoading(false);
-      return setError("Bot detected.");
+      return;
     }
 
-    // =========================
     // VALIDATION
-    // =========================
     if (!isValidPhone(phone)) {
       setLoading(false);
       return setError("Enter a valid phone number.");
-    }
-
-    if (!isQualified) {
-      setLoading(false);
-      return setError("Application not approved.");
     }
 
     try {
@@ -147,17 +136,20 @@ export default function Apply() {
         phone: cleanedPhone,
         plan,
         lead_score: leadScore,
+        intent: isHighIntent ? "high" : "medium",
         source: "apply_form",
       };
 
       // =========================
-      // LEAD (async, non-blocking)
+      // LEAD TRACKING (non-blocking)
       // =========================
       fetch("/api/leads/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-      }).catch(() => {});
+      }).catch((err) => {
+        console.error("Lead tracking failed:", err);
+      });
 
       // =========================
       // CHECKOUT
@@ -170,12 +162,18 @@ export default function Apply() {
 
       const data = await res.json().catch(() => null);
 
-      if (!res.ok) throw new Error(data?.error || "Checkout failed");
-      if (!data?.url) throw new Error("Missing checkout URL");
+      if (!res.ok) {
+        throw new Error(data?.error || "Checkout failed");
+      }
+
+      if (!data?.url) {
+        throw new Error("Missing checkout URL");
+      }
 
       window.location.href = data.url;
     } catch (err) {
-      setError(err.message || "Something went wrong.");
+      console.error(err);
+      setError(err.message || "Something went wrong. Please try again.");
       setLoading(false);
     }
   };
@@ -185,7 +183,6 @@ export default function Apply() {
   // =========================
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-
       <div className="w-full max-w-xl bg-white rounded-2xl shadow-md p-8">
 
         {/* Honeypot */}
@@ -205,15 +202,7 @@ export default function Apply() {
           Limited contractor access per territory.
         </p>
 
-        <p
-          className={`mt-3 text-sm font-bold ${
-            isQualified ? "text-green-600" : "text-red-500"
-          }`}
-        >
-          {isQualified ? "Pre-Qualified" : "Qualification Required"}
-        </p>
-
-        <p className="text-xs text-gray-500 mt-1">
+        <p className="text-xs text-gray-500 mt-2">
           Step {step} of 2
         </p>
 
@@ -229,6 +218,17 @@ export default function Apply() {
             <option value="domination">Domination — $1999/mo</option>
           </select>
         </div>
+
+        {/* INTENT INDICATOR */}
+        <p
+          className={`mt-3 text-sm font-semibold ${
+            isHighIntent ? "text-green-600" : "text-yellow-600"
+          }`}
+        >
+          {isHighIntent
+            ? "High Intent Lead"
+            : "Reviewing Application"}
+        </p>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
 
