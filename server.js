@@ -22,7 +22,6 @@ const {
   TWILIO_AUTH_TOKEN,
   TWILIO_PHONE,
   STRIPE_SECRET_KEY,
-  STRIPE_WEBHOOK_SECRET,
   FRONTEND_URL,
   PORT,
 } = process.env;
@@ -47,7 +46,7 @@ for (const key of required) {
 }
 
 // =====================
-// INIT
+// INIT SERVICES
 // =====================
 const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 const twilioClient = twilio(TWILIO_SID, TWILIO_AUTH_TOKEN);
@@ -56,11 +55,13 @@ const stripe = new Stripe(STRIPE_SECRET_KEY);
 // =====================
 // MIDDLEWARE
 // =====================
+app.use(
+  cors({
+    origin: FRONTEND_URL,
+    methods: ["GET", "POST"],
+  })
+);
 
-// IMPORTANT: Stripe webhook must NOT use json middleware
-app.post("/api/stripe/webhook", express.raw({ type: "application/json" }));
-
-app.use(cors({ origin: FRONTEND_URL }));
 app.use(express.json());
 
 // =====================
@@ -101,14 +102,22 @@ function sendDrip(phone, messages) {
 }
 
 // =====================
-// HEALTH CHECK (Render)
+// HEALTH CHECK
 // =====================
 app.get("/", (req, res) => {
   res.send("🚀 RoofFlow API LIVE");
 });
 
 // =====================
-// STRIPE CHECKOUT (FRONTEND CALLS THIS)
+// EVENT TRACKING (FIXED)
+// =====================
+app.post("/api/event", (req, res) => {
+  console.log("📊 EVENT:", req.body);
+  res.json({ success: true });
+});
+
+// =====================
+// STRIPE CHECKOUT
 // =====================
 app.post("/api/checkout", async (req, res) => {
   try {
@@ -138,7 +147,11 @@ app.post("/api/checkout", async (req, res) => {
       success_url: `${FRONTEND_URL}/success`,
       cancel_url: `${FRONTEND_URL}/cancel`,
 
-      metadata: { email, phone, plan },
+      metadata: {
+        email,
+        phone,
+        plan,
+      },
     });
 
     res.json({ url: session.url });
@@ -149,39 +162,45 @@ app.post("/api/checkout", async (req, res) => {
 });
 
 // =====================
-// STRIPE WEBHOOK (FIXED + VERIFIED)
+// STRIPE WEBHOOK (ROBUST)
 // =====================
-app.post("/api/stripe/webhook", (req, res) => {
-  let event;
+app.post(
+  "/api/stripe/webhook",
+  express.raw({ type: "application/json" }),
+  (req, res) => {
+    let event;
 
-  try {
-    event = JSON.parse(req.body.toString());
-  } catch {
-    return res.status(400).send("Invalid webhook");
-  }
-
-  if (event.type === "checkout.session.completed") {
-    const session = event.data.object;
-    const phone = session.metadata?.phone;
-
-    console.log("💰 PAYMENT SUCCESS:", session.metadata);
-
-    if (phone) {
-      sendDrip(phone, dripSequence());
+    try {
+      event = JSON.parse(req.body.toString());
+    } catch (err) {
+      return res.status(400).send("Invalid webhook");
     }
-  }
 
-  res.json({ received: true });
-});
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object;
+      const phone = session.metadata?.phone;
+
+      console.log("💰 PAYMENT SUCCESS:", session.metadata);
+
+      if (phone) {
+        sendDrip(phone, dripSequence());
+      }
+    }
+
+    res.json({ received: true });
+  }
+);
 
 // =====================
-// LEAD CAPTURE (FROM FRONTEND FORM)
+// LEAD CAPTURE
 // =====================
 app.post("/api/lead", async (req, res) => {
   try {
     const { phone } = req.body;
 
-    if (!phone) return res.status(400).json({ error: "Missing phone" });
+    if (!phone) {
+      return res.status(400).json({ error: "Missing phone" });
+    }
 
     await twilioClient.messages.create({
       body: "Thanks — we’ll follow up shortly.",
@@ -193,7 +212,7 @@ app.post("/api/lead", async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
+    console.error("Lead error:", err);
     res.status(500).json({ error: "Lead error" });
   }
 });
@@ -211,7 +230,10 @@ app.post("/sms", async (req, res) => {
     const ai = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
-        { role: "system", content: "Short helpful business assistant." },
+        {
+          role: "system",
+          content: "Short helpful business assistant.",
+        },
         { role: "user", content: msg },
       ],
     });
@@ -227,7 +249,7 @@ app.post("/sms", async (req, res) => {
 
     res.sendStatus(200);
   } catch (err) {
-    console.error(err);
+    console.error("SMS error:", err);
     res.sendStatus(500);
   }
 });
