@@ -1,17 +1,25 @@
 const { createClient } = require("@supabase/supabase-js");
 
-if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+const url = process.env.SUPABASE_URL;
+const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!url || !key) {
   throw new Error("Missing Supabase environment variables");
 }
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-  {
-    realtime: {
-      enabled: false, // 🔥 CRITICAL FIX
+/* ===============================
+   DISABLE REALTIME COMPLETELY
+   (Fixes Node 20 WebSocket crash)
+=============================== */
+const supabase = createClient(url, key, {
+  auth: {
+    persistSession: false,
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 0,
     },
-  }
-);
+  },
+});
 
 module.exports = supabase;
