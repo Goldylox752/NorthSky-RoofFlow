@@ -16,6 +16,11 @@ const supabase = createClient(url, key, {
     autoRefreshToken: false,
     detectSessionInUrl: false,
   },
+
+  realtime: {
+    enabled: false,   // 🔥 THIS IS THE KEY FIX
+  },
+
   global: {
     headers: {
       "X-Client-Info": "flow-os-backend",
