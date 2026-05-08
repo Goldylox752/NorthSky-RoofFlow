@@ -8,17 +8,8 @@ if (!url || !key) {
 }
 
 /* ===============================
-   SAFE REST CLIENT (NO REALTIME)
+   PURE REST CLIENT (NO REALTIME AT ALL)
 =============================== */
-const supabase = createClient(url, key, {
-  auth: {
-    persistSession: false,
-    autoRefreshToken: false,
-    detectSessionInUrl: false,
-  },
-  realtime: {
-    enabled: false,
-  },
-});
+const supabase = createClient(url, key);
 
 module.exports = supabase;
