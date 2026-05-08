@@ -2,16 +2,13 @@ const router = require("express").Router();
 const stripe = require("../lib/stripe");
 const crypto = require("crypto");
 
-/* ===============================
-   CREATE CHECKOUT SESSION
-=============================== */
 router.post("/checkout", async (req, res) => {
   try {
     const { email, name, plan, leadId } = req.body;
 
-    /* ===============================
-       VALIDATION
-    =============================== */
+    // =========================
+    // VALIDATION
+    // =========================
     if (!email || !plan) {
       return res.status(400).json({
         success: false,
@@ -19,6 +16,8 @@ router.post("/checkout", async (req, res) => {
         error: "Missing email or plan",
       });
     }
+
+    const cleanEmail = email.toLowerCase().trim();
 
     const prices = {
       starter: 9900,
@@ -28,7 +27,7 @@ router.post("/checkout", async (req, res) => {
 
     const amount = prices[plan];
 
-    if (!amount) {
+    if (typeof amount !== "number") {
       return res.status(400).json({
         success: false,
         stage: "validation",
@@ -36,21 +35,20 @@ router.post("/checkout", async (req, res) => {
       });
     }
 
-    /* ===============================
-       IDEMPOTENCY KEY (PREVENT DUPLICATES)
-    =============================== */
-    const idempotencyKey = crypto
-      .createHash("sha256")
-      .update(email + plan)
-      .digest("hex");
+    // =========================
+    // IDEMPOTENCY KEY
+    // =========================
+    const idempotencyKey = `${cleanEmail}-${plan}`;
 
-    /* ===============================
-       CREATE STRIPE SESSION
-    =============================== */
+    // =========================
+    // STRIPE SESSION
+    // =========================
     const session = await stripe.checkout.sessions.create(
       {
         mode: "payment",
-        customer_email: email,
+        customer_email: cleanEmail,
+
+        payment_method_types: ["card"],
 
         line_items: [
           {
@@ -68,11 +66,8 @@ router.post("/checkout", async (req, res) => {
         success_url: `${process.env.FRONTEND_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${process.env.FRONTEND_URL}/cancel`,
 
-        /* ===============================
-           CRITICAL: WEBHOOK LINKING DATA
-        =============================== */
         metadata: {
-          email,
+          email: cleanEmail,
           plan,
           leadId: leadId || null,
         },
@@ -82,9 +77,6 @@ router.post("/checkout", async (req, res) => {
       }
     );
 
-    /* ===============================
-       RESPONSE (FRONTEND SAFE)
-    =============================== */
     return res.json({
       success: true,
       stage: "checkout_created",
