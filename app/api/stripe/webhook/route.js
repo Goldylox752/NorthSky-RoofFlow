@@ -3,9 +3,6 @@ const router = express.Router();
 const Stripe = require("stripe");
 const { createClient } = require("@supabase/supabase-js");
 
-/* ===============================
-   INIT
-=============================== */
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 const supabase = createClient(
@@ -13,14 +10,8 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-/* ===============================
-   HANDLE EVENT LOGIC
-=============================== */
 async function handleEvent(event) {
-  if (event.type !== "checkout.session.completed") {
-    console.log("Ignored event:", event.type);
-    return;
-  }
+  if (event.type !== "checkout.session.completed") return;
 
   const session = event.data.object;
 
@@ -28,45 +19,43 @@ async function handleEvent(event) {
   const plan = session.metadata?.plan;
 
   if (!leadId || !plan) {
-    console.error("Invalid metadata:", session.metadata);
     throw new Error("Missing leadId or plan in metadata");
   }
 
-  const customerId =
-    session.customer ||
-    session.customer_details?.email ||
-    null;
+  const stripeCustomerId = session.customer || null;
+  const email = session.customer_details?.email || null;
 
-  const amount = (session.amount_total || 0) / 100;
+  if (!session.amount_total) {
+    throw new Error("Missing amount_total");
+  }
 
-  /* ===============================
-     1. UPDATE LEAD
-  =============================== */
+  const amount = session.amount_total / 100;
+
+  // =========================
+  // UPDATE LEAD
+  // =========================
   const { error: leadError } = await supabase
     .from("leads")
     .update({
       paid: true,
       plan,
       status: "paid",
-      stripe_customer_id: customerId,
+      stripe_customer_id: stripeCustomerId,
     })
-    .eq("id", leadId);
+    .eq("id", leadId.trim());
 
-  if (leadError) {
-    console.error("Lead update failed:", leadError);
-    throw leadError;
-  }
+  if (leadError) throw leadError;
 
-  /* ===============================
-     2. CREATE PAYMENT RECORD
-  =============================== */
+  // =========================
+  // PAYMENT RECORD
+  // =========================
   const { error: paymentError } = await supabase
     .from("payments")
     .upsert(
       {
         id: session.id,
         lead_id: leadId,
-        stripe_customer_id: customerId,
+        stripe_customer_id: stripeCustomerId,
         amount,
         currency: session.currency || "usd",
         status: "paid",
@@ -75,15 +64,9 @@ async function handleEvent(event) {
       { onConflict: "id" }
     );
 
-  if (paymentError) {
-    console.error("Payment insert failed:", paymentError);
-    throw paymentError;
-  }
+  if (paymentError) throw paymentError;
 }
 
-/* ===============================
-   WEBHOOK ROUTE
-=============================== */
 router.post(
   "/",
   express.raw({ type: "application/json" }),
@@ -94,48 +77,42 @@ router.post(
       const sig = req.headers["stripe-signature"];
 
       if (!sig) {
-        return res.status(400).json({ error: "Missing Stripe signature" });
+        return res.status(400).json({
+          error: "Missing Stripe signature",
+        });
       }
 
-      /* ===============================
-         VERIFY STRIPE EVENT
-      =============================== */
       event = stripe.webhooks.constructEvent(
         req.body,
         sig,
         process.env.STRIPE_WEBHOOK_SECRET
       );
 
-      console.log("[StripeWebhook]", event.id, event.type);
-
-      /* ===============================
-         IDEMPOTENCY (UPsert = SAFE)
-      =============================== */
-      const { error: insertError } = await supabase
+      // =========================
+      // IDEMPOTENCY CHECK
+      // =========================
+      const { data: existing } = await supabase
         .from("stripe_events")
-        .upsert(
-          {
-            id: event.id,
-            type: event.type,
-            status: "processing",
-            created_at: new Date().toISOString(),
-          },
-          { onConflict: "id" }
-        );
+        .select("status")
+        .eq("id", event.id)
+        .single();
 
-      if (insertError) {
-        console.error("Event insert failed:", insertError);
-        throw insertError;
+      if (existing?.status === "completed") {
+        return res.json({
+          received: true,
+          skipped: true,
+        });
       }
 
-      /* ===============================
-         PROCESS EVENT
-      =============================== */
+      await supabase.from("stripe_events").upsert({
+        id: event.id,
+        type: event.type,
+        status: "processing",
+        created_at: new Date().toISOString(),
+      });
+
       await handleEvent(event);
 
-      /* ===============================
-         MARK COMPLETE
-      =============================== */
       await supabase
         .from("stripe_events")
         .update({
@@ -147,7 +124,7 @@ router.post(
       return res.json({ received: true });
 
     } catch (err) {
-      console.error("❌ Webhook error:", err);
+      console.error("Webhook error:", err);
 
       if (event?.id) {
         await supabase
