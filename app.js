@@ -1,102 +1,104 @@
-<script>
-  const btn = document.getElementById("checkoutBtn");
+const btn = document.getElementById("checkoutBtn");
 
-  if (!btn) {
-    console.error("❌ checkoutBtn not found");
-  } else {
-    btn.addEventListener("click", async () => {
-      const originalText = btn.innerText;
+if (!btn) {
+  console.error("❌ checkoutBtn not found");
+} else {
+  btn.addEventListener("click", async () => {
+    const originalText = btn.innerText;
+    let timeoutId;
 
-      let timeoutId;
+    try {
+      // ===============================
+      // LOADING STATE
+      // ===============================
+      btn.disabled = true;
+      btn.innerText = "Redirecting...";
+
+      // ===============================
+      // EMAIL INPUT
+      // ===============================
+      const input = prompt("Enter your email address:");
+
+      if (!input) {
+        throw new Error("Email is required");
+      }
+
+      const email = input.trim().toLowerCase();
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+      if (!emailRegex.test(email)) {
+        throw new Error("Invalid email format");
+      }
+
+      // ===============================
+      // TIMEOUT SAFETY
+      // ===============================
+      const controller = new AbortController();
+
+      timeoutId = setTimeout(() => {
+        controller.abort();
+      }, 8000);
+
+      // ===============================
+      // API CALL
+      // ===============================
+      const response = await fetch(
+        "/api/payments/checkout",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email,
+            name: "Guest User",
+            plan: "starter",
+          }),
+          signal: controller.signal,
+        }
+      );
+
+      clearTimeout(timeoutId);
+
+      let data;
 
       try {
-        /* ===============================
-           LOADING STATE
-        =============================== */
-        btn.disabled = true;
-        btn.innerText = "Redirecting...";
+        data = await response.json();
+      } catch {
+        throw new Error("Invalid server response");
+      }
 
-        /* ===============================
-           EMAIL INPUT
-        =============================== */
-        const input = prompt("Enter your email address:");
-
-        if (!input) throw new Error("Email is required");
-
-        const email = input.trim().toLowerCase();
-
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-        if (!emailRegex.test(email)) {
-          throw new Error("Invalid email format");
-        }
-
-        /* ===============================
-           TIMEOUT SAFETY (8s)
-        =============================== */
-        const controller = new AbortController();
-
-        timeoutId = setTimeout(() => {
-          controller.abort();
-        }, 8000);
-
-        /* ===============================
-           API CALL
-        =============================== */
-        const response = await fetch(
-          "/api/payments/checkout",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              email,
-              name: "Guest User",
-              plan: "starter",
-            }),
-            signal: controller.signal,
-          }
+      if (!response.ok) {
+        throw new Error(
+          data?.error || "Checkout failed"
         );
+      }
 
-        clearTimeout(timeoutId);
+      if (!data?.url) {
+        throw new Error("Missing checkout URL");
+      }
 
-        let data;
+      // ===============================
+      // REDIRECT TO STRIPE
+      // ===============================
+      window.location.href = data.url;
 
-        try {
-          data = await response.json();
-        } catch {
-          throw new Error("Invalid server response");
-        }
+    } catch (err) {
+      console.error("Checkout Error:", err);
 
-        if (!response.ok) {
-          throw new Error(
-            data?.error || "Checkout failed"
-          );
-        }
-
-        if (!data?.url) {
-          throw new Error("Missing checkout URL");
-        }
-
-        /* ===============================
-           REDIRECT TO STRIPE
-        =============================== */
-        window.location.href = data.url;
-
-      } catch (err) {
-        console.error("Checkout Error:", err);
-
-        alert(err.name === "AbortError"
+      alert(
+        err.name === "AbortError"
           ? "Request timed out. Try again."
           : err.message || "Checkout failed"
-        );
+      );
 
-        btn.disabled = false;
-        btn.innerText = originalText;
+      btn.disabled = false;
+      btn.innerText = originalText;
 
-        if (timeoutId) clearTimeout(timeoutId);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
       }
-    });
-  }
-</script>
+    }
+  });
+}
