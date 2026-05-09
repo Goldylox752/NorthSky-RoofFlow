@@ -3,9 +3,9 @@ const supabase = require("../../lib/supabase");
 const normalizeEmail = require("../utils/normalizeEmail");
 
 /* ===============================
-   GET CUSTOMER BY EMAIL
+   GET STRIPE CUSTOMER ID
 =============================== */
-async function getCustomer(email) {
+async function getCustomerId(email) {
   const cleanEmail = normalizeEmail(email);
   if (!cleanEmail) throw new Error("Missing email");
 
@@ -23,10 +23,23 @@ async function getCustomer(email) {
 }
 
 /* ===============================
+   GET ACTIVE SUBSCRIPTION
+=============================== */
+async function getActiveSubscription(customerId) {
+  const subs = await stripe.subscriptions.list({
+    customer: customerId,
+    status: "all",
+    limit: 1,
+  });
+
+  return subs.data[0] || null;
+}
+
+/* ===============================
    PORTAL SESSION
 =============================== */
 exports.createPortalSession = async (email) => {
-  const customerId = await getCustomer(email);
+  const customerId = await getCustomerId(email);
 
   const session = await stripe.billingPortal.sessions.create({
     customer: customerId,
@@ -43,21 +56,18 @@ exports.createPortalSession = async (email) => {
    CANCEL SUBSCRIPTION
 =============================== */
 exports.cancelSubscription = async (email) => {
-  const customerId = await getCustomer(email);
+  const customerId = await getCustomerId(email);
 
-  const subs = await stripe.subscriptions.list({
-    customer: customerId,
-    limit: 1,
-  });
+  const subscription = await getActiveSubscription(customerId);
 
-  if (!subs.data.length) {
+  if (!subscription) {
     return {
       success: true,
       message: "No active subscription",
     };
   }
 
-  await stripe.subscriptions.update(subs.data[0].id, {
+  await stripe.subscriptions.update(subscription.id, {
     cancel_at_period_end: true,
   });
 
