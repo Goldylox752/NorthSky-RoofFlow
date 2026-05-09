@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const stripe = require("../lib/stripe");
+const supabase = require("../lib/supabase");
 
 /* ===============================
    VALIDATE STRIPE INSTANCE
@@ -9,47 +10,59 @@ if (!stripe || typeof stripe.checkout?.sessions?.create !== "function") {
 }
 
 /* ===============================
-   CREATE CHECKOUT SESSION
+   CREATE CHECKOUT SESSION (AUTH-BASED)
 =============================== */
 async function createCheckoutSession(params) {
   const {
-    email,
-    leadId,
+    user,        // ✅ from auth middleware
     plan = "starter",
-    amount,
   } = params || {};
 
   try {
     /* ===============================
        VALIDATION
     =============================== */
-    if (!email) throw new Error("Missing email");
-    if (!amount || isNaN(amount)) throw new Error("Invalid amount");
-    if (!process.env.FRONTEND_URL) throw new Error("Missing FRONTEND_URL");
+    if (!user?.id) throw new Error("Missing auth user");
+
+    const { data } = await supabase
+      .from("users")
+      .select("stripe_customer_id")
+      .eq("auth_id", user.id)
+      .maybeSingle();
+
+    if (!data?.stripe_customer_id) {
+      throw new Error("Stripe customer not linked");
+    }
 
     /* ===============================
-       NORMALIZE AMOUNT SAFELY
-       (prevents double-cents bug)
+       PLAN PRICING (SERVER TRUSTED)
     =============================== */
-    const numericAmount = Number(amount);
-    const unitAmount =
-      numericAmount < 100 ? Math.round(numericAmount * 100) : Math.round(numericAmount);
+    const PRICES = {
+      starter: 1000,
+      growth: 2000,
+      elite: 5000,
+    };
+
+    const amount = PRICES[plan];
+
+    if (!amount) throw new Error("Invalid plan");
 
     /* ===============================
        IDEMPOTENCY KEY
     =============================== */
     const idempotencyKey = crypto
       .createHash("sha256")
-      .update(`${email}:${leadId}:${plan}:${unitAmount}`)
+      .update(`${user.id}:${plan}:${amount}`)
       .digest("hex");
 
     /* ===============================
-       CREATE SESSION
+       CREATE STRIPE SESSION
     =============================== */
     const session = await stripe.checkout.sessions.create(
       {
         mode: "payment",
-        customer_email: email,
+
+        customer: data.stripe_customer_id,
 
         line_items: [
           {
@@ -57,22 +70,20 @@ async function createCheckoutSession(params) {
               currency: "usd",
               product_data: {
                 name: `Flow OS - ${plan.toUpperCase()}`,
-                description: "AI-powered lead automation system",
               },
-              unit_amount: unitAmount,
+              unit_amount: amount,
             },
             quantity: 1,
           },
         ],
 
+        metadata: {
+          auth_id: user.id,
+          plan,
+        },
+
         success_url: `${process.env.FRONTEND_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${process.env.FRONTEND_URL}/cancel`,
-
-        metadata: {
-          email,
-          plan,
-          leadId: leadId || "",
-        },
       },
       {
         idempotencyKey,
@@ -80,7 +91,7 @@ async function createCheckoutSession(params) {
     );
 
     if (!session?.url) {
-      throw new Error("Stripe did not return a checkout URL");
+      throw new Error("Stripe did not return checkout URL");
     }
 
     return {
@@ -89,17 +100,13 @@ async function createCheckoutSession(params) {
     };
 
   } catch (err) {
-    const safeLog = {
+    console.error("❌ Checkout Error:", {
       message: err.message,
-      email,
-      leadId,
+      userId: user?.id,
       plan,
-      amount,
-    };
+    });
 
-    console.error("❌ Stripe Checkout Error:", safeLog);
-
-    throw new Error("Checkout session creation failed");
+    throw err;
   }
 }
 
