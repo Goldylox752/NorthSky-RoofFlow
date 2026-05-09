@@ -2,59 +2,86 @@
 
 import { useState } from "react";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL || "";
 
-// map frontend plans → backend-safe pricing
-const PLAN_PRICES = {
-  starter: 99,
-  growth: 199,
-  elite: 499,
-};
+const plans = [
+  {
+    id: "starter",
+    name: "Starter",
+    price: "$99",
+    color: "#111827",
+  },
+  {
+    id: "growth",
+    name: "Growth",
+    price: "$199",
+    color: "#2563eb",
+  },
+  {
+    id: "elite",
+    name: "Elite",
+    price: "$499",
+    color: "#16a34a",
+  },
+];
 
 export default function Buy() {
-  const [loadingPlan, setLoadingPlan] = useState(null);
-  const [error, setError] = useState("");
+  const [loadingPlan, setLoadingPlan] =
+    useState<string | null>(null);
 
-  const buy = async (plan) => {
+  const [error, setError] =
+    useState("");
+
+  const buy = async (
+    planId: string
+  ) => {
     try {
       setError("");
-      setLoadingPlan(plan);
+      setLoadingPlan(planId);
 
       if (!API_URL) {
-        throw new Error("API URL not configured");
+        throw new Error(
+          "Missing NEXT_PUBLIC_API_URL"
+        );
       }
 
-      const price = PLAN_PRICES[plan];
+      const res = await fetch(
+        `${API_URL}/api/checkout`,
+        {
+          method: "POST",
 
-      if (!price) {
-        throw new Error("Invalid plan selected");
-      }
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
 
-      const res = await fetch(`${API_URL}/api/checkout`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          plan,
-          amount: price,
-        }),
-      });
+          body: JSON.stringify({
+            plan: planId,
+          }),
+        }
+      );
 
-      let data;
-      try {
-        data = await res.json();
-      } catch {
-        throw new Error("Invalid server response");
-      }
+      const data =
+        await res.json();
 
       if (!res.ok || !data?.url) {
-        throw new Error(data?.error || "Checkout failed");
+        throw new Error(
+          data?.error ||
+            "Checkout failed"
+        );
       }
 
-      window.location.href = data.url;
-    } catch (err) {
-      setError(err.message || "Something went wrong");
+      window.location.href =
+        data.url;
+    } catch (err: any) {
+      console.error(err);
+
+      setError(
+        err.message ||
+          "Something went wrong"
+      );
+
       setLoadingPlan(null);
     }
   };
@@ -62,107 +89,124 @@ export default function Buy() {
   return (
     <main style={styles.page}>
       <div style={styles.container}>
-        <h1 style={styles.title}>Buy Roofing Leads</h1>
+        <h1 style={styles.title}>
+          Buy Roofing Leads
+        </h1>
 
         <p style={styles.sub}>
-          Instant access to contractor lead marketplace
+          Secure Stripe checkout with
+          instant access to contractor
+          leads.
         </p>
 
-        {error && <div style={styles.error}>⚠️ {error}</div>}
+        {error && (
+          <div style={styles.error}>
+            ⚠️ {error}
+          </div>
+        )}
 
-        {/* STARTER */}
-        <button
-          onClick={() => buy("starter")}
-          disabled={!!loadingPlan}
-          style={{
-            ...styles.btn,
-            opacity:
-              loadingPlan && loadingPlan !== "starter" ? 0.5 : 1,
-          }}
-        >
-          {loadingPlan === "starter"
-            ? "Redirecting..."
-            : "Starter — $99"}
-        </button>
-
-        {/* GROWTH */}
-        <button
-          onClick={() => buy("growth")}
-          disabled={!!loadingPlan}
-          style={{
-            ...styles.btn,
-            background: "#2563eb",
-            opacity:
-              loadingPlan && loadingPlan !== "growth" ? 0.5 : 1,
-          }}
-        >
-          {loadingPlan === "growth"
-            ? "Redirecting..."
-            : "Growth — $199"}
-        </button>
-
-        {/* ELITE */}
-        <button
-          onClick={() => buy("elite")}
-          disabled={!!loadingPlan}
-          style={{
-            ...styles.btn,
-            background: "#16a34a",
-            opacity:
-              loadingPlan && loadingPlan !== "elite" ? 0.5 : 1,
-          }}
-        >
-          {loadingPlan === "elite"
-            ? "Redirecting..."
-            : "Elite — $499"}
-        </button>
+        {plans.map((plan) => (
+          <button
+            key={plan.id}
+            onClick={() =>
+              buy(plan.id)
+            }
+            disabled={
+              !!loadingPlan
+            }
+            style={{
+              ...styles.btn,
+              background:
+                plan.color,
+              opacity:
+                loadingPlan &&
+                loadingPlan !==
+                  plan.id
+                  ? 0.5
+                  : 1,
+            }}
+          >
+            {loadingPlan ===
+            plan.id
+              ? "Redirecting..."
+              : `${plan.name} — ${plan.price}`}
+          </button>
+        ))}
 
         <p style={styles.note}>
-          Secure Stripe checkout • Instant access after payment
+          Secure payments powered
+          by Stripe
         </p>
       </div>
     </main>
   );
 }
 
-const styles = {
+const styles: any = {
   page: {
-    padding: 60,
-    fontFamily: "system-ui",
+    minHeight: "100vh",
+    background: "#0b0f17",
+    color: "#fff",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+    fontFamily:
+      "system-ui, sans-serif",
   },
+
   container: {
-    maxWidth: 600,
-    margin: "0 auto",
+    width: "100%",
+    maxWidth: 520,
+    background:
+      "rgba(17,24,39,0.9)",
+    padding: 32,
+    borderRadius: 18,
+    border:
+      "1px solid rgba(255,255,255,0.08)",
   },
+
   title: {
-    fontSize: 40,
-    marginBottom: 10,
+    fontSize: 42,
+    marginBottom: 12,
+    fontWeight: 800,
   },
+
   sub: {
     opacity: 0.7,
-    marginBottom: 20,
+    marginBottom: 28,
+    lineHeight: 1.6,
   },
+
   btn: {
     width: "100%",
-    padding: 14,
-    marginBottom: 10,
-    background: "#111",
+    padding: 16,
+    marginBottom: 14,
     color: "#fff",
     border: "none",
-    borderRadius: 8,
+    borderRadius: 12,
     cursor: "pointer",
-    fontWeight: 600,
+    fontWeight: 700,
+    fontSize: 16,
+    transition:
+      "all 0.2s ease",
   },
+
   error: {
-    background: "#fee2e2",
-    color: "#991b1b",
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 15,
+    background:
+      "rgba(127,29,29,0.3)",
+    border:
+      "1px solid rgba(239,68,68,0.3)",
+    color: "#fca5a5",
+    padding: 14,
+    borderRadius: 10,
+    marginBottom: 18,
   },
+
   note: {
-    marginTop: 15,
+    marginTop: 18,
     fontSize: 13,
-    opacity: 0.6,
+    opacity: 0.5,
+    textAlign: "center",
   },
 };
