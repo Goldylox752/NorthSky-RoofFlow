@@ -14,18 +14,24 @@ router.post(
   "/",
   express.raw({ type: "application/json" }),
   async (req, res) => {
-    let event;
-
     try {
       const sig = req.headers["stripe-signature"];
 
-      event = stripe.webhooks.constructEvent(
+      const event = stripe.webhooks.constructEvent(
         req.body,
         sig,
         process.env.STRIPE_WEBHOOK_SECRET
       );
 
       console.log("[Stripe Event]", event.type);
+
+      /* ===============================
+         IDEMPOTENCY SAFETY (IMPORTANT)
+      =============================== */
+      const eventId = event.id;
+
+      // OPTIONAL (recommended):
+      // store eventId in DB and skip if already processed
 
       /* ===============================
          EVENT ROUTER
