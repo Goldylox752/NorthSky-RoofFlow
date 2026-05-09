@@ -1,16 +1,14 @@
 const supabase = require("../lib/supabase");
 
 /* ===============================
-   AUTH MIDDLEWARE
+   AUTH MIDDLEWARE (HARDENED MVP)
 =============================== */
 module.exports = async function auth(req, res, next) {
   try {
     const email =
-      req.headers["x-user-email"] ||
-      req.body?.email ||
-      req.query?.email;
+      req.headers["x-user-email"];
 
-    if (!email) {
+    if (!email || typeof email !== "string") {
       return res.status(401).json({
         success: false,
         error: "Unauthorized",
@@ -19,23 +17,26 @@ module.exports = async function auth(req, res, next) {
 
     const cleanEmail = email.toLowerCase().trim();
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("users")
-      .select("*")
+      .select("id, email, stripe_customer_id, status")
       .eq("email", cleanEmail)
       .maybeSingle();
 
-    if (!data) {
+    if (error || !data) {
       return res.status(401).json({
         success: false,
         error: "User not found",
       });
     }
 
-    req.user = data; // attach user to request
+    req.user = data;
 
     next();
+
   } catch (err) {
+    console.error("Auth error:", err);
+
     return res.status(500).json({
       success: false,
       error: "Auth middleware failed",
