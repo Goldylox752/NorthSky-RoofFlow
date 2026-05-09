@@ -6,12 +6,12 @@ const cors = require("cors");
 const app = express();
 
 /* ===============================
-   TRUST PROXY (IMPORTANT for Render / Stripe)
+   TRUST PROXY
 =============================== */
 app.set("trust proxy", 1);
 
 /* ===============================
-   CORS (PRODUCTION SAFE)
+   CORS
 =============================== */
 app.use(
   cors({
@@ -22,8 +22,7 @@ app.use(
 );
 
 /* ===============================
-   BODY PARSING
-   (IMPORTANT: Stripe webhook needs raw body)
+   JSON BODY PARSER (GLOBAL)
 =============================== */
 app.use(express.json());
 
@@ -56,7 +55,7 @@ app.use((req, res) => {
 });
 
 /* ===============================
-   GLOBAL ERROR HANDLER (ADDED FIX)
+   GLOBAL ERROR HANDLER
 =============================== */
 app.use((err, req, res, next) => {
   console.error("🔥 Server Error:", err);
