@@ -1,37 +1,30 @@
 const router = require("express").Router();
 const auth = require("../middleware/auth.middleware");
-const billing = require("../middleware/billing.middleware");
-
-const { createCheckoutSession } = require("../lib/checkout");
+const { createCheckoutSession } = require("../services/stripe/checkout.service");
 
 /* ===============================
    CHECKOUT (PROTECTED)
 =============================== */
-router.post(
-  "/checkout",
-  auth,
-  async (req, res) => {
-    try {
-      const user = req.user;
+router.post("/checkout", auth, async (req, res) => {
+  try {
+    const session = await createCheckoutSession({
+      authId: req.user.id,
+      plan: req.body.plan,
+    });
 
-      const session = await createCheckoutSession({
-        plan: req.body.plan,
-        email: user.email,
-        customerId: user.stripe_customer_id,
-      });
+    return res.json({
+      success: true,
+      url: session.url,
+    });
 
-      return res.json({
-        success: true,
-        url: session.url,
-      });
+  } catch (err) {
+    console.error("Checkout error:", err);
 
-    } catch (err) {
-      return res.status(400).json({
-        success: false,
-        error: err.message,
-      });
-    }
+    return res.status(400).json({
+      success: false,
+      error: err.message,
+    });
   }
-);
+});
 
 module.exports = router;
