@@ -1,55 +1,35 @@
 const router = require("express").Router();
 const stripe = require("../lib/stripe");
+const auth = require("../middleware/auth.middleware");
 
 /* ===============================
-   VALIDATION HELPERS
+   PRICES (SERVER-TRUSTED ONLY)
 =============================== */
-const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PRICES = {
+  starter: 100,
+  pro: 200,
+};
 
 /* ===============================
-   CHECKOUT SESSION
+   CHECKOUT SESSION (AUTH REQUIRED)
 =============================== */
-router.post("/checkout", async (req, res) => {
+router.post("/checkout", auth, async (req, res) => {
   try {
-    const { email, name = "Guest User", plan = "starter" } = req.body || {};
+    const user = req.user;
+    const { plan = "starter" } = req.body;
 
-    // ===============================
-    // VALIDATION
-    // ===============================
-    if (!email) {
+    const amount = PRICES[plan];
+    if (!amount) {
       return res.status(400).json({
         success: false,
-        error: "Missing email",
+        error: "Invalid plan",
       });
     }
 
-    const cleanEmail = email.toLowerCase().trim();
-
-    if (!emailRegex.test(cleanEmail)) {
-      return res.status(400).json({
-        success: false,
-        error: "Invalid email",
-      });
-    }
-
-    // ===============================
-    // PRICE CONFIG (temporary)
-    // Replace with Stripe Price IDs later
-    // ===============================
-    const prices = {
-      starter: 100,
-      pro: 200,
-    };
-
-    const amount = prices[plan] || prices.starter;
-
-    // ===============================
-    // CREATE STRIPE SESSION
-    // ===============================
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
 
-      customer_email: cleanEmail,
+      customer_email: user.email,
 
       payment_method_types: ["card"],
 
@@ -59,7 +39,6 @@ router.post("/checkout", async (req, res) => {
             currency: "usd",
             product_data: {
               name: `Flow OS - ${plan}`,
-              description: "Automated lead system access",
             },
             unit_amount: amount,
           },
@@ -68,8 +47,7 @@ router.post("/checkout", async (req, res) => {
       ],
 
       metadata: {
-        email: cleanEmail,
-        name,
+        auth_id: user.id,
         plan,
       },
 
@@ -81,6 +59,7 @@ router.post("/checkout", async (req, res) => {
       success: true,
       url: session.url,
     });
+
   } catch (err) {
     console.error("Checkout error:", err);
 
@@ -92,8 +71,7 @@ router.post("/checkout", async (req, res) => {
 });
 
 /* ===============================
-   VERIFY (READ-ONLY ONLY)
-   ⚠️ DO NOT USE FOR PAYMENT TRUTH
+   VERIFY (UI ONLY)
 =============================== */
 router.get("/verify", async (req, res) => {
   try {
@@ -109,24 +87,20 @@ router.get("/verify", async (req, res) => {
 
     const session = await stripe.checkout.sessions.retrieve(session_id);
 
-    const paid = session.payment_status === "paid";
-
     return res.json({
       success: true,
-      paid,
-      email:
-        session.customer_details?.email ||
-        session.customer_email ||
-        session.metadata?.email ||
-        null,
+      paid: session.payment_status === "paid",
+      email: session.customer_email || null,
+      plan: session.metadata?.plan || null,
     });
+
   } catch (err) {
     console.error("Verify error:", err);
 
     return res.status(500).json({
       success: false,
       paid: false,
-      error: err.message || "verification_failed",
+      error: err.message,
     });
   }
 });
