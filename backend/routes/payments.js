@@ -1,17 +1,17 @@
 const router = require("express").Router();
 const stripe = require("../lib/stripe");
-const supabase = require("../lib/supabase");
+
+/* ===============================
+   VALIDATION HELPERS
+=============================== */
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /* ===============================
    CHECKOUT SESSION
 =============================== */
 router.post("/checkout", async (req, res) => {
   try {
-    const {
-      email,
-      name = "Guest User",
-      plan = "starter",
-    } = req.body || {};
+    const { email, name = "Guest User", plan = "starter" } = req.body || {};
 
     // ===============================
     // VALIDATION
@@ -23,12 +23,7 @@ router.post("/checkout", async (req, res) => {
       });
     }
 
-    const cleanEmail = email
-      .toLowerCase()
-      .trim();
-
-    const emailRegex =
-      /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const cleanEmail = email.toLowerCase().trim();
 
     if (!emailRegex.test(cleanEmail)) {
       return res.status(400).json({
@@ -38,102 +33,67 @@ router.post("/checkout", async (req, res) => {
     }
 
     // ===============================
-    // PRICE MAP
-    // Amounts are in cents
+    // PRICE CONFIG (temporary)
+    // Replace with Stripe Price IDs later
     // ===============================
-    const amountMap = {
+    const prices = {
       starter: 100,
       pro: 200,
     };
 
-    const amount =
-      amountMap[plan] || amountMap.starter;
+    const amount = prices[plan] || prices.starter;
 
     // ===============================
     // CREATE STRIPE SESSION
     // ===============================
-    const session =
-      await stripe.checkout.sessions.create({
-        mode: "payment",
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
 
-        customer_email: cleanEmail,
+      customer_email: cleanEmail,
 
-        payment_method_types: ["card"],
+      payment_method_types: ["card"],
 
-        line_items: [
-          {
-            price_data: {
-              currency: "usd",
-
-              product_data: {
-                name: `Flow OS - ${plan}`,
-                description:
-                  "Automated lead system access",
-              },
-
-              unit_amount: amount,
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: `Flow OS - ${plan}`,
+              description: "Automated lead system access",
             },
-
-            quantity: 1,
+            unit_amount: amount,
           },
-        ],
-
-        metadata: {
-          email: cleanEmail,
-          name,
-          plan,
+          quantity: 1,
         },
+      ],
 
-        success_url:
-          `${process.env.FRONTEND_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+      metadata: {
+        email: cleanEmail,
+        name,
+        plan,
+      },
 
-        cancel_url:
-          `${process.env.FRONTEND_URL}/cancel`,
-      });
-
-    // ===============================
-    // OPTIONAL LEAD UPSERT
-    // ===============================
-    try {
-      await supabase
-        .from("leads")
-        .upsert([
-          {
-            email: cleanEmail,
-            name,
-            plan,
-            paid: false,
-            status: "pending",
-          },
-        ]);
-    } catch (dbErr) {
-      console.error(
-        "Supabase save warning:",
-        dbErr.message
-      );
-    }
+      success_url: `${process.env.FRONTEND_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.FRONTEND_URL}/cancel`,
+    });
 
     return res.json({
       success: true,
       url: session.url,
     });
-
   } catch (err) {
-    console.error(
-      "Checkout error:",
-      err
-    );
+    console.error("Checkout error:", err);
 
     return res.status(500).json({
       success: false,
-      error:
-        err?.message || "checkout_failed",
+      error: err.message || "checkout_failed",
     });
   }
 });
 
 /* ===============================
-   VERIFY SESSION
+   VERIFY (READ-ONLY ONLY)
+   ⚠️ DO NOT USE FOR PAYMENT TRUTH
 =============================== */
 router.get("/verify", async (req, res) => {
   try {
@@ -147,62 +107,26 @@ router.get("/verify", async (req, res) => {
       });
     }
 
-    // ===============================
-    // GET SESSION
-    // ===============================
-    const session =
-      await stripe.checkout.sessions.retrieve(
-        session_id
-      );
+    const session = await stripe.checkout.sessions.retrieve(session_id);
 
-    const paid =
-      session.payment_status === "paid";
-
-    if (!paid) {
-      return res.json({
-        success: true,
-        paid: false,
-      });
-    }
-
-    const email =
-      session.customer_details?.email ||
-      session.customer_email ||
-      session.metadata?.email;
-
-    if (email) {
-      await supabase
-        .from("leads")
-        .update({
-          paid: true,
-          status: "paid",
-          activated_at:
-            new Date().toISOString(),
-        })
-        .eq(
-          "email",
-          email.toLowerCase().trim()
-        );
-    }
+    const paid = session.payment_status === "paid";
 
     return res.json({
       success: true,
-      paid: true,
-      email,
+      paid,
+      email:
+        session.customer_details?.email ||
+        session.customer_email ||
+        session.metadata?.email ||
+        null,
     });
-
   } catch (err) {
-    console.error(
-      "Verify error:",
-      err
-    );
+    console.error("Verify error:", err);
 
     return res.status(500).json({
       success: false,
       paid: false,
-      error:
-        err?.message ||
-        "verification_failed",
+      error: err.message || "verification_failed",
     });
   }
 });
