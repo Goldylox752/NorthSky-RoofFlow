@@ -2,34 +2,37 @@ const crypto = require("crypto");
 const stripe = require("../lib/stripe");
 const { getOrCreateStripeCustomer } = require("../services/stripe/customer.service");
 
-/* ===============================
-   PRICING (SERVER-TRUSTED)
-=============================== */
 const PRICES = {
   starter: 1000,
   growth: 2000,
   elite: 5000,
 };
 
-/* ===============================
-   CREATE CHECKOUT SESSION (AUTH-BASED)
-=============================== */
+const ALLOWED_PLANS = new Set(["starter", "growth", "elite"]);
+
 async function createCheckoutSession({ authId, plan = "starter" }) {
   try {
+    /* ===============================
+       VALIDATION
+    =============================== */
     if (!authId) throw new Error("Missing auth_id");
+    if (!ALLOWED_PLANS.has(plan)) {
+      throw new Error("Invalid plan");
+    }
 
     const amount = PRICES[plan];
-    if (!amount) throw new Error("Invalid plan");
 
     /* ===============================
-       RESOLVE STRIPE CUSTOMER (NO DB DUPLICATION)
+       CUSTOMER RESOLUTION
     =============================== */
-    const customerId = await getOrCreateStripeCustomer({
-      id: authId,
-    });
+    const customerId = await getOrCreateStripeCustomer({ id: authId });
+
+    if (!customerId) {
+      throw new Error("Stripe customer resolution failed");
+    }
 
     /* ===============================
-       IDEMPOTENCY KEY
+       IDEMPOTENCY
     =============================== */
     const idempotencyKey = crypto
       .createHash("sha256")
@@ -37,12 +40,11 @@ async function createCheckoutSession({ authId, plan = "starter" }) {
       .digest("hex");
 
     /* ===============================
-       CREATE STRIPE SESSION
+       STRIPE SESSION
     =============================== */
     const session = await stripe.checkout.sessions.create(
       {
         mode: "payment",
-
         customer: customerId,
 
         line_items: [
@@ -66,13 +68,11 @@ async function createCheckoutSession({ authId, plan = "starter" }) {
         success_url: `${process.env.FRONTEND_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${process.env.FRONTEND_URL}/cancel`,
       },
-      {
-        idempotencyKey,
-      }
+      { idempotencyKey }
     );
 
     if (!session?.url) {
-      throw new Error("Stripe did not return checkout URL");
+      throw new Error("Stripe session missing URL");
     }
 
     return {
