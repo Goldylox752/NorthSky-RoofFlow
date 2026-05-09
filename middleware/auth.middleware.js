@@ -10,9 +10,6 @@ const supabase = createClient(
 
 /* ===============================
    AUTH MIDDLEWARE (JWT)
-   - Auth only
-   - NO email leakage
-   - auth_id is single source of truth
 =============================== */
 module.exports = async function auth(req, res, next) {
   try {
@@ -34,9 +31,6 @@ module.exports = async function auth(req, res, next) {
       });
     }
 
-    /* ===============================
-       VERIFY USER VIA SUPABASE JWT
-    =============================== */
     const { data, error } = await supabase.auth.getUser(token);
 
     if (error || !data?.user) {
@@ -47,11 +41,24 @@ module.exports = async function auth(req, res, next) {
     }
 
     /* ===============================
-       ATTACH MINIMAL USER CONTEXT
-       (IMPORTANT: no email to enforce clean architecture)
+       CORE IDENTITY
     =============================== */
+    const userId = data.user.id;
+
+    /* ===============================
+       OPTIONAL: LIGHT DB ENRICHMENT
+       (safe + minimal, avoids over-fetching)
+    =============================== */
+    const { data: profile } = await supabase
+      .from("users")
+      .select("stripe_customer_id, status")
+      .eq("auth_id", userId)
+      .maybeSingle();
+
     req.user = {
-      id: data.user.id,
+      id: userId,
+      stripe_customer_id: profile?.stripe_customer_id || null,
+      status: profile?.status || "unknown",
     };
 
     next();
