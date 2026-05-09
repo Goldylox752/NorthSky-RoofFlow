@@ -1,7 +1,7 @@
 const { createClient } = require("@supabase/supabase-js");
 
 /* ===============================
-   SUPABASE CLIENT (NO SERVICE ROLE NEEDED FOR AUTH CHECK)
+   SUPABASE CLIENT
 =============================== */
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -9,7 +9,10 @@ const supabase = createClient(
 );
 
 /* ===============================
-   REAL AUTH MIDDLEWARE (JWT)
+   AUTH MIDDLEWARE (JWT)
+   - Auth only
+   - NO email leakage
+   - auth_id is single source of truth
 =============================== */
 module.exports = async function auth(req, res, next) {
   try {
@@ -32,7 +35,7 @@ module.exports = async function auth(req, res, next) {
     }
 
     /* ===============================
-       VERIFY JWT WITH SUPABASE
+       VERIFY USER VIA SUPABASE JWT
     =============================== */
     const { data, error } = await supabase.auth.getUser(token);
 
@@ -44,11 +47,11 @@ module.exports = async function auth(req, res, next) {
     }
 
     /* ===============================
-       ATTACH SECURE USER OBJECT
+       ATTACH MINIMAL USER CONTEXT
+       (IMPORTANT: no email to enforce clean architecture)
     =============================== */
     req.user = {
       id: data.user.id,
-      email: data.user.email,
     };
 
     next();
