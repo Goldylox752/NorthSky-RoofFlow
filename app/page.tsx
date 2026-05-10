@@ -30,207 +30,134 @@ export default function Home() {
   };
 
   return (
-    <main
-      style={{
-        background: "#0b0f17",
-        color: "#fff",
-        minHeight: "100vh",
-        padding: "60px 20px",
-        fontFamily: "system-ui",
-      }}
-    >
+    <main style={styles.main}>
 
-      {/* HERO */}
-      <section style={{ maxWidth: 900, margin: "0 auto", textAlign: "center" }}>
-        <h1 style={{ fontSize: 58, marginBottom: 12 }}>
-          Flow OS
+      {/* HERO (UPGRADED FOR CONVERSION) */}
+      <section style={styles.hero}>
+        <h1 style={styles.h1}>
+          Launch SaaS products without building backend infrastructure
         </h1>
 
-        <p style={{ fontSize: 24, opacity: 0.95, maxWidth: 780, margin: "0 auto" }}>
-          Build, automate, and launch SaaS products faster than ever.
+        <p style={styles.heroSub}>
+          Flow OS gives you prebuilt workflows, payments, and automation so you can go from idea → revenue in minutes.
         </p>
 
-        <p style={{ marginTop: 18, fontSize: 16, opacity: 0.7, maxWidth: 720, marginLeft: "auto", marginRight: "auto" }}>
-          Flow OS gives you a complete backend system for workflows, payments, and automation —
-          so you can ship real products without infrastructure complexity.
+        <p style={styles.heroSmall}>
+          Stop wasting weeks wiring auth, Stripe, and backend logic. Start shipping real products instead.
         </p>
 
-        <p style={{ marginTop: 14, fontSize: 14, opacity: 0.6 }}>
-          Built for founders, developers, and indie hackers launching real businesses.
-        </p>
-
-        {/* CTA */}
-        <div style={{ marginTop: 32, display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-          <button
-            style={primaryBtn}
-            onClick={() => checkout("starter")}
-          >
-            Start building
+        <div style={styles.ctaRow}>
+          <button style={styles.primaryBtn} onClick={() => checkout("starter")}>
+            Start building free
           </button>
 
           <button
-            style={secondaryBtn}
+            style={styles.secondaryBtn}
             onClick={() => window.scrollTo({ top: 900, behavior: "smooth" })}
           >
-            View pricing
+            See pricing
           </button>
         </div>
 
-        <p style={{ marginTop: 18, fontSize: 13, opacity: 0.55 }}>
-          Secure payments via Stripe • Cancel anytime • No setup fees
+        <p style={styles.microTrust}>
+          No setup fees • Stripe-secured • Cancel anytime
         </p>
       </section>
 
-      {/* VALUE PROP STRIP */}
-      <section style={{ maxWidth: 900, margin: "80px auto", textAlign: "center" }}>
-        <h2 style={{ fontSize: 28 }}>
-          Everything you need to launch a SaaS product
-        </h2>
+      {/* TRUST STRIP (NEW - VERY IMPORTANT) */}
+      <section style={styles.trust}>
+        <p>⚡ Built for indie hackers shipping real SaaS products</p>
+        <p>💳 Powered by Stripe infrastructure</p>
+        <p>🚀 Designed to replace backend boilerplate</p>
+      </section>
 
-        <p style={{ opacity: 0.6, marginTop: 10 }}>
-          No backend setup. No infrastructure headaches. Just build and ship.
-        </p>
+      {/* VALUE PROP */}
+      <section style={styles.value}>
+        <h2>Everything you need to launch and monetize a SaaS</h2>
+        <p>No backend setup. No DevOps. No complexity. Just build and launch.</p>
       </section>
 
       {/* FEATURES */}
-      <section
-        style={{
-          maxWidth: 1000,
-          margin: "60px auto",
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          gap: 20,
-        }}
-      >
-        <div style={card}>
-          ⚡ Instant Setup
-          <p style={sub}>
-            Go from idea to working SaaS backend in minutes.
-          </p>
+      <section style={styles.grid}>
+        <div style={styles.card}>
+          ⚡ Instant SaaS Setup
+          <p>Go from idea to working product in minutes.</p>
         </div>
 
-        <div style={card}>
+        <div style={styles.card}>
           🤖 Automation Engine
-          <p style={sub}>
-            Automate workflows, users, and business logic end-to-end.
-          </p>
+          <p>Run workflows, users, and logic automatically.</p>
         </div>
 
-        <div style={card}>
+        <div style={styles.card}>
           💳 Payments Built-In
-          <p style={sub}>
-            Accept subscriptions and payments instantly with Stripe.
-          </p>
+          <p>Stripe subscriptions ready out of the box.</p>
         </div>
 
-        <div style={card}>
+        <div style={styles.card}>
           🔐 Production Ready
-          <p style={sub}>
-            Secure architecture built for real-world SaaS scaling.
-          </p>
+          <p>Secure architecture built for scaling real apps.</p>
         </div>
       </section>
 
       {/* HOW IT WORKS */}
-      <section style={{ maxWidth: 800, margin: "0 auto", textAlign: "center" }}>
+      <section style={styles.section}>
         <h2>How Flow OS works</h2>
 
-        <div style={{ marginTop: 40, display: "grid", gap: 18 }}>
-          <div style={card}>
-            <h3>1. Build your system</h3>
-            <p style={sub}>Choose or create workflows for your SaaS product.</p>
+        <div style={styles.steps}>
+          <div style={styles.card}>
+            <h3>1. Choose a system</h3>
+            <p>Select a prebuilt SaaS or automation template.</p>
           </div>
 
-          <div style={card}>
-            <h3>2. Connect payments</h3>
-            <p style={sub}>Enable Stripe billing, subscriptions, and checkout flows.</p>
+          <div style={styles.card}>
+            <h3>2. Connect Stripe</h3>
+            <p>Enable payments and subscriptions instantly.</p>
           </div>
 
-          <div style={card}>
-            <h3>3. Launch & scale</h3>
-            <p style={sub}>Your system runs automatically and grows with your users.</p>
+          <div style={styles.card}>
+            <h3>3. Launch & earn</h3>
+            <p>Your system runs and starts processing users automatically.</p>
           </div>
         </div>
       </section>
 
-      {/* PRICING */}
-      <section style={{ maxWidth: 1100, margin: "100px auto", textAlign: "center" }}>
-        <h2 style={{ fontSize: 34 }}>
-          Simple pricing that grows with you
-        </h2>
+      {/* PRICING (RESTRUCTURED PSYCHOLOGY) */}
+      <section style={styles.pricing}>
+        <h2>Simple pricing that scales with your growth</h2>
+        <p>Start small. Upgrade when you're making revenue.</p>
 
-        <p style={{ opacity: 0.6, marginTop: 10 }}>
-          Start small, validate your idea, and scale when you're ready.
-        </p>
-
-        <div
-          style={{
-            display: "flex",
-            gap: 20,
-            justifyContent: "center",
-            marginTop: 40,
-            flexWrap: "wrap",
-          }}
-        >
+        <div style={styles.pricingGrid}>
 
           {/* STARTER */}
-          <div style={card}>
+          <div style={styles.card}>
             <h3>Starter</h3>
-            <p style={{ fontSize: 22 }}>$9/mo</p>
+            <p style={styles.price}>$9/mo</p>
+            <p>For testing ideas and building your first system.</p>
 
-            <p style={sub}>
-              Perfect for testing and building your first system.
-            </p>
-
-            <ul style={list}>
-              <li>Basic workflows</li>
-              <li>Stripe integration</li>
-              <li>Core automation tools</li>
-            </ul>
-
-            <button style={btn} onClick={() => checkout("starter")} disabled={loading}>
+            <button style={styles.btn} onClick={() => checkout("starter")} disabled={loading}>
               Start Starter
             </button>
           </div>
 
-          {/* GROWTH */}
-          <div style={{ ...card, border: "2px solid #4f7cff", transform: "scale(1.05)" }}>
+          {/* GROWTH (PRIMARY FOCUS) */}
+          <div style={styles.highlightCard}>
             <h3>Growth ⭐</h3>
-            <p style={{ fontSize: 22 }}>$29/mo</p>
+            <p style={styles.price}>$29/mo</p>
+            <p>Best for launching real SaaS products that generate revenue.</p>
 
-            <p style={sub}>
-              Best for launching real SaaS products and getting paying users.
-            </p>
-
-            <ul style={list}>
-              <li>Advanced workflows</li>
-              <li>Scalable automation engine</li>
-              <li>Production-ready setup</li>
-              <li>Priority performance</li>
-            </ul>
-
-            <button style={btn} onClick={() => checkout("growth")} disabled={loading}>
-              Upgrade to Growth
+            <button style={styles.btn} onClick={() => checkout("growth")} disabled={loading}>
+              Choose Growth
             </button>
           </div>
 
           {/* ELITE */}
-          <div style={card}>
+          <div style={styles.card}>
             <h3>Elite</h3>
-            <p style={{ fontSize: 22 }}>$79/mo</p>
+            <p style={styles.price}>$79/mo</p>
+            <p>For agencies and scaling SaaS businesses.</p>
 
-            <p style={sub}>
-              For agencies and high-scale SaaS systems.
-            </p>
-
-            <ul style={list}>
-              <li>Full automation suite</li>
-              <li>Advanced integrations</li>
-              <li>Premium support</li>
-              <li>High-scale architecture</li>
-            </ul>
-
-            <button style={btn} onClick={() => checkout("elite")} disabled={loading}>
+            <button style={styles.btn} onClick={() => checkout("elite")} disabled={loading}>
               Go Elite
             </button>
           </div>
@@ -238,84 +165,184 @@ export default function Home() {
         </div>
       </section>
 
-      {/* LOADING */}
-      {loading && (
-        <p style={{ textAlign: "center", marginTop: 40, opacity: 0.7 }}>
-          Redirecting to secure checkout...
-        </p>
-      )}
-
       {/* FINAL CTA */}
-      <section style={{ textAlign: "center", marginTop: 120 }}>
-        <h2>Ready to launch your SaaS?</h2>
-        <p style={{ opacity: 0.6 }}>
-          Start building your system in minutes.
-        </p>
+      <section style={styles.final}>
+        <h2>Ready to build your first SaaS?</h2>
+        <p>Start in minutes and launch something real today.</p>
 
-        <button
-          style={{ ...primaryBtn, marginTop: 20 }}
-          onClick={() => checkout("starter")}
-        >
+        <button style={styles.primaryBtn} onClick={() => checkout("starter")}>
           Start now
         </button>
       </section>
 
+      {/* LOADING */}
+      {loading && (
+        <p style={{ textAlign: "center", marginTop: 30, opacity: 0.7 }}>
+          Redirecting to secure checkout...
+        </p>
+      )}
+
       {/* FOOTER */}
-      <footer style={{ textAlign: "center", marginTop: 100, opacity: 0.5 }}>
-        Flow OS — Build faster. Automate everything. Launch real products.
+      <footer style={styles.footer}>
+        Flow OS — Replace backend complexity. Ship faster. Earn sooner.
       </footer>
     </main>
   );
 }
 
-/* STYLES */
+/* ================= STYLES ================= */
 
-const card = {
-  background: "#141a2a",
-  padding: 24,
-  borderRadius: 14,
-  textAlign: "center",
-  width: 260,
-};
+const styles = {
+  main: {
+    background: "#0b0f17",
+    color: "#fff",
+    fontFamily: "system-ui",
+    padding: "60px 20px",
+  },
 
-const sub = {
-  fontSize: 14,
-  opacity: 0.75,
-  marginTop: 10,
-};
+  hero: {
+    maxWidth: 900,
+    margin: "0 auto",
+    textAlign: "center",
+  },
 
-const list = {
-  textAlign: "left",
-  marginTop: 15,
-  fontSize: 14,
-  opacity: 0.8,
-};
+  h1: {
+    fontSize: 52,
+    marginBottom: 12,
+  },
 
-const primaryBtn = {
-  background: "#4f7cff",
-  color: "#fff",
-  border: "none",
-  padding: "12px 18px",
-  borderRadius: 10,
-  cursor: "pointer",
-};
+  heroSub: {
+    fontSize: 22,
+    opacity: 0.9,
+    maxWidth: 780,
+    margin: "0 auto",
+  },
 
-const secondaryBtn = {
-  background: "transparent",
-  color: "#fff",
-  border: "1px solid #2a2f3a",
-  padding: "12px 18px",
-  borderRadius: 10,
-  cursor: "pointer",
-};
+  heroSmall: {
+    marginTop: 14,
+    fontSize: 14,
+    opacity: 0.6,
+  },
 
-const btn = {
-  marginTop: 15,
-  background: "#4f7cff",
-  color: "#fff",
-  border: "none",
-  padding: "10px 14px",
-  borderRadius: 10,
-  cursor: "pointer",
-  width: "100%",
+  ctaRow: {
+    marginTop: 30,
+    display: "flex",
+    gap: 12,
+    justifyContent: "center",
+    flexWrap: "wrap",
+  },
+
+  microTrust: {
+    marginTop: 18,
+    fontSize: 12,
+    opacity: 0.5,
+  },
+
+  trust: {
+    textAlign: "center",
+    marginTop: 60,
+    opacity: 0.7,
+    fontSize: 14,
+  },
+
+  value: {
+    textAlign: "center",
+    marginTop: 80,
+    maxWidth: 800,
+    marginLeft: "auto",
+    marginRight: "auto",
+  },
+
+  grid: {
+    maxWidth: 1000,
+    margin: "60px auto",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    gap: 20,
+  },
+
+  section: {
+    textAlign: "center",
+    marginTop: 80,
+  },
+
+  steps: {
+    display: "grid",
+    gap: 18,
+    maxWidth: 800,
+    margin: "40px auto",
+  },
+
+  pricing: {
+    textAlign: "center",
+    marginTop: 100,
+  },
+
+  pricingGrid: {
+    display: "flex",
+    gap: 20,
+    justifyContent: "center",
+    marginTop: 40,
+    flexWrap: "wrap",
+  },
+
+  final: {
+    textAlign: "center",
+    marginTop: 120,
+  },
+
+  footer: {
+    textAlign: "center",
+    marginTop: 100,
+    opacity: 0.5,
+  },
+
+  card: {
+    background: "#141a2a",
+    padding: 24,
+    borderRadius: 14,
+    width: 260,
+  },
+
+  highlightCard: {
+    background: "#141a2a",
+    padding: 24,
+    borderRadius: 14,
+    width: 260,
+    border: "2px solid #4f7cff",
+    transform: "scale(1.05)",
+  },
+
+  primaryBtn: {
+    background: "#4f7cff",
+    color: "#fff",
+    border: "none",
+    padding: "12px 18px",
+    borderRadius: 10,
+    cursor: "pointer",
+  },
+
+  secondaryBtn: {
+    background: "transparent",
+    color: "#fff",
+    border: "1px solid #2a2f3a",
+    padding: "12px 18px",
+    borderRadius: 10,
+    cursor: "pointer",
+  },
+
+  btn: {
+    marginTop: 15,
+    background: "#4f7cff",
+    color: "#fff",
+    border: "none",
+    padding: "10px 14px",
+    borderRadius: 10,
+    width: "100%",
+    cursor: "pointer",
+  },
+
+  price: {
+    fontSize: 22,
+  },
 };
