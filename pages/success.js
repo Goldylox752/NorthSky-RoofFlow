@@ -1,71 +1,51 @@
-import { useEffect, useState } from "react";
-import { useRouter } from "next/router";
+"use client";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 export default function Success() {
   const router = useRouter();
-  const { session_id } = router.query;
-
-  const [status, setStatus] = useState("verifying");
 
   useEffect(() => {
-    if (!session_id || !API_URL) return;
-
-    let isMounted = true;
-
-    const verifyPayment = async () => {
+    const run = async () => {
       try {
-        setStatus("verifying");
+        // ensure we are in browser
+        if (typeof window === "undefined") return;
 
-        const res = await fetch(
-          `${API_URL}/api/payments/verify?session_id=${session_id}`
-        );
+        // mark user as paid (MVP method)
+        localStorage.setItem("user_paid", "true");
 
-        const data = await res.json();
+        // small delay for UX
+        await new Promise((res) => setTimeout(res, 1200));
 
-        if (!isMounted) return;
-
-        if (data?.paid) {
-          setStatus("success");
-
-          // small delay for UX
-          setTimeout(() => {
-            if (isMounted) {
-              router.push("/dashboard");
-            }
-          }, 1200);
-        } else {
-          setStatus("failed");
-        }
+        // safer navigation method
+        router.replace("/dashboard");
       } catch (err) {
-        console.error("Payment verification error:", err);
-        if (isMounted) setStatus("failed");
+        console.error("Success page error:", err);
       }
     };
 
-    verifyPayment();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [session_id, router]);
+    run();
+  }, [router]);
 
   return (
-    <div style={{ padding: 40, textAlign: "center" }}>
-      <h1>Payment Status</h1>
-
-      {status === "verifying" && <p>Verifying payment...</p>}
-      {status === "success" && (
-        <p style={{ color: "green" }}>
-          Payment confirmed! Redirecting...
-        </p>
-      )}
-      {status === "failed" && (
-        <p style={{ color: "red" }}>
-          Payment could not be verified.
-        </p>
-      )}
+    <div
+      style={{
+        padding: 40,
+        color: "#fff",
+        background: "#0b0f17",
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        alignItems: "center",
+        textAlign: "center",
+      }}
+    >
+      <h1>Payment Successful 🎉</h1>
+      <p style={{ opacity: 0.7, marginTop: 10 }}>
+        Redirecting you to your dashboard...
+      </p>
     </div>
   );
 }
