@@ -39,32 +39,33 @@ export default function Home() {
         fontFamily: "system-ui",
       }}
     >
+
       {/* HERO */}
       <section style={{ maxWidth: 900, margin: "0 auto", textAlign: "center" }}>
-        <h1 style={{ fontSize: 56, marginBottom: 12 }}>
+        <h1 style={{ fontSize: 58, marginBottom: 12 }}>
           Flow OS
         </h1>
 
-        <p style={{ fontSize: 22, opacity: 0.95, maxWidth: 750, margin: "0 auto" }}>
-          Launch, automate, and monetize your business in minutes.
+        <p style={{ fontSize: 24, opacity: 0.95, maxWidth: 780, margin: "0 auto" }}>
+          Build, automate, and launch SaaS products faster than ever.
         </p>
 
-        <p style={{ marginTop: 18, fontSize: 16, opacity: 0.7, maxWidth: 700, marginLeft: "auto", marginRight: "auto" }}>
-          Flow OS gives you workflows, payments, and backend automation — without infrastructure complexity.
-          Build real SaaS systems without writing backend code.
+        <p style={{ marginTop: 18, fontSize: 16, opacity: 0.7, maxWidth: 720, marginLeft: "auto", marginRight: "auto" }}>
+          Flow OS gives you a complete backend system for workflows, payments, and automation —
+          so you can ship real products without infrastructure complexity.
         </p>
 
-        <p style={{ marginTop: 16, fontSize: 14, opacity: 0.6 }}>
-          Built for founders, developers, and startups who want to ship faster and scale without backend overhead.
+        <p style={{ marginTop: 14, fontSize: 14, opacity: 0.6 }}>
+          Built for founders, developers, and indie hackers launching real businesses.
         </p>
 
         {/* CTA */}
-        <div style={{ marginTop: 30, display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+        <div style={{ marginTop: 32, display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
           <button
             style={primaryBtn}
             onClick={() => checkout("starter")}
           >
-            Start building free
+            Start building
           </button>
 
           <button
@@ -75,8 +76,19 @@ export default function Home() {
           </button>
         </div>
 
-        <p style={{ marginTop: 18, fontSize: 13, opacity: 0.6 }}>
-          Stripe-powered • Secure by default • Cancel anytime
+        <p style={{ marginTop: 18, fontSize: 13, opacity: 0.55 }}>
+          Secure payments via Stripe • Cancel anytime • No setup fees
+        </p>
+      </section>
+
+      {/* VALUE PROP STRIP */}
+      <section style={{ maxWidth: 900, margin: "80px auto", textAlign: "center" }}>
+        <h2 style={{ fontSize: 28 }}>
+          Everything you need to launch a SaaS product
+        </h2>
+
+        <p style={{ opacity: 0.6, marginTop: 10 }}>
+          No backend setup. No infrastructure headaches. Just build and ship.
         </p>
       </section>
 
@@ -84,7 +96,7 @@ export default function Home() {
       <section
         style={{
           maxWidth: 1000,
-          margin: "80px auto",
+          margin: "60px auto",
           display: "grid",
           gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
           gap: 20,
@@ -93,50 +105,50 @@ export default function Home() {
         <div style={card}>
           ⚡ Instant Setup
           <p style={sub}>
-            Go from idea to live system in minutes — no backend setup required.
+            Go from idea to working SaaS backend in minutes.
           </p>
         </div>
 
         <div style={card}>
           🤖 Automation Engine
           <p style={sub}>
-            Build workflows that handle leads, actions, and business logic automatically.
+            Automate workflows, users, and business logic end-to-end.
           </p>
         </div>
 
         <div style={card}>
-          💳 Stripe Ready
+          💳 Payments Built-In
           <p style={sub}>
-            Accept payments and subscriptions instantly with built-in Stripe integration.
+            Accept subscriptions and payments instantly with Stripe.
           </p>
         </div>
 
         <div style={card}>
           🔐 Production Ready
           <p style={sub}>
-            Secure, scalable architecture built for real SaaS products.
+            Secure architecture built for real-world SaaS scaling.
           </p>
         </div>
       </section>
 
       {/* HOW IT WORKS */}
       <section style={{ maxWidth: 800, margin: "0 auto", textAlign: "center" }}>
-        <h2>How it works</h2>
+        <h2>How Flow OS works</h2>
 
-        <div style={{ marginTop: 40, display: "grid", gap: 20 }}>
+        <div style={{ marginTop: 40, display: "grid", gap: 18 }}>
           <div style={card}>
-            <h3>1. Create your system</h3>
-            <p style={sub}>Sign up and choose a workflow template.</p>
+            <h3>1. Build your system</h3>
+            <p style={sub}>Choose or create workflows for your SaaS product.</p>
           </div>
 
           <div style={card}>
-            <h3>2. Connect Stripe & logic</h3>
-            <p style={sub}>Enable payments, triggers, and automation rules.</p>
+            <h3>2. Connect payments</h3>
+            <p style={sub}>Enable Stripe billing, subscriptions, and checkout flows.</p>
           </div>
 
           <div style={card}>
             <h3>3. Launch & scale</h3>
-            <p style={sub}>Your system runs automatically and handles users & revenue.</p>
+            <p style={sub}>Your system runs automatically and grows with your users.</p>
           </div>
         </div>
       </section>
@@ -144,11 +156,11 @@ export default function Home() {
       {/* PRICING */}
       <section style={{ maxWidth: 1100, margin: "100px auto", textAlign: "center" }}>
         <h2 style={{ fontSize: 34 }}>
-          Simple pricing that scales with your growth
+          Simple pricing that grows with you
         </h2>
 
-        <p style={{ opacity: 0.7, marginTop: 10 }}>
-          Start small, validate your idea, and upgrade anytime.
+        <p style={{ opacity: 0.6, marginTop: 10 }}>
+          Start small, validate your idea, and scale when you're ready.
         </p>
 
         <div
@@ -160,17 +172,20 @@ export default function Home() {
             flexWrap: "wrap",
           }}
         >
+
           {/* STARTER */}
           <div style={card}>
             <h3>Starter</h3>
             <p style={{ fontSize: 22 }}>$9/mo</p>
 
-            <p style={sub}>Perfect for building your first automation system.</p>
+            <p style={sub}>
+              Perfect for testing and building your first system.
+            </p>
 
             <ul style={list}>
-              <li>Core workflow builder</li>
-              <li>Stripe checkout integration</li>
-              <li>Basic automation tools</li>
+              <li>Basic workflows</li>
+              <li>Stripe integration</li>
+              <li>Core automation tools</li>
             </ul>
 
             <button style={btn} onClick={() => checkout("starter")} disabled={loading}>
@@ -179,11 +194,13 @@ export default function Home() {
           </div>
 
           {/* GROWTH */}
-          <div style={{ ...card, border: "2px solid #4f7cff", transform: "scale(1.04)" }}>
+          <div style={{ ...card, border: "2px solid #4f7cff", transform: "scale(1.05)" }}>
             <h3>Growth ⭐</h3>
             <p style={{ fontSize: 22 }}>$29/mo</p>
 
-            <p style={sub}>Best for launching real products and getting paying users.</p>
+            <p style={sub}>
+              Best for launching real SaaS products and getting paying users.
+            </p>
 
             <ul style={list}>
               <li>Advanced workflows</li>
@@ -202,7 +219,9 @@ export default function Home() {
             <h3>Elite</h3>
             <p style={{ fontSize: 22 }}>$79/mo</p>
 
-            <p style={sub}>For agencies and high-scale production systems.</p>
+            <p style={sub}>
+              For agencies and high-scale SaaS systems.
+            </p>
 
             <ul style={list}>
               <li>Full automation suite</li>
@@ -215,6 +234,7 @@ export default function Home() {
               Go Elite
             </button>
           </div>
+
         </div>
       </section>
 
@@ -225,11 +245,24 @@ export default function Home() {
         </p>
       )}
 
+      {/* FINAL CTA */}
+      <section style={{ textAlign: "center", marginTop: 120 }}>
+        <h2>Ready to launch your SaaS?</h2>
+        <p style={{ opacity: 0.6 }}>
+          Start building your system in minutes.
+        </p>
+
+        <button
+          style={{ ...primaryBtn, marginTop: 20 }}
+          onClick={() => checkout("starter")}
+        >
+          Start now
+        </button>
+      </section>
+
       {/* FOOTER */}
-      <footer style={{ textAlign: "center", marginTop: 100, opacity: 0.6 }}>
-        Flow OS — Build systems. Automate growth. Launch faster.
-        <br />
-        Secure payments powered by Stripe. Cancel anytime.
+      <footer style={{ textAlign: "center", marginTop: 100, opacity: 0.5 }}>
+        Flow OS — Build faster. Automate everything. Launch real products.
       </footer>
     </main>
   );
