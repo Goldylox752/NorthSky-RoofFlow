@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 export default function Home() {
   const [loading, setLoading] = useState(false);
 
-  const checkout = async (plan: string) => {
+  const checkout = async (plan) => {
     setLoading(true);
 
     try {
@@ -32,18 +32,18 @@ export default function Home() {
   return (
     <main style={styles.main}>
 
-      {/* HERO (UPGRADED FOR CONVERSION) */}
+      {/* HERO (ROAS OPTIMIZED) */}
       <section style={styles.hero}>
         <h1 style={styles.h1}>
           Launch SaaS products without building backend infrastructure
         </h1>
 
-        <p style={styles.heroSub}>
-          Flow OS gives you prebuilt workflows, payments, and automation so you can go from idea → revenue in minutes.
+        <p style={styles.subHero}>
+          Flow OS replaces your backend stack with ready-to-use workflows, payments, and automation so you can go from idea → revenue in minutes.
         </p>
 
-        <p style={styles.heroSmall}>
-          Stop wasting weeks wiring auth, Stripe, and backend logic. Start shipping real products instead.
+        <p style={styles.mini}>
+          Stop spending weeks wiring Stripe, auth, and APIs from scratch.
         </p>
 
         <div style={styles.ctaRow}>
@@ -51,52 +51,60 @@ export default function Home() {
             Start building free
           </button>
 
-          <button
-            style={styles.secondaryBtn}
-            onClick={() => window.scrollTo({ top: 900, behavior: "smooth" })}
-          >
+          <button style={styles.secondaryBtn}>
             See pricing
           </button>
         </div>
 
-        <p style={styles.microTrust}>
-          No setup fees • Stripe-secured • Cancel anytime
+        <p style={styles.trustLine}>
+          Stripe-secured • No setup fees • Cancel anytime
         </p>
       </section>
 
-      {/* TRUST STRIP (NEW - VERY IMPORTANT) */}
+      {/* TRUST STRIP */}
       <section style={styles.trust}>
-        <p>⚡ Built for indie hackers shipping real SaaS products</p>
-        <p>💳 Powered by Stripe infrastructure</p>
-        <p>🚀 Designed to replace backend boilerplate</p>
+        Built for indie hackers and founders launching real SaaS products
       </section>
 
-      {/* VALUE PROP */}
-      <section style={styles.value}>
-        <h2>Everything you need to launch and monetize a SaaS</h2>
-        <p>No backend setup. No DevOps. No complexity. Just build and launch.</p>
+      {/* PROBLEM SECTION (HIGH CONVERSION DRIVER) */}
+      <section style={styles.problem}>
+        <h2>Most SaaS ideas never launch because backend setup takes too long</h2>
+
+        <p>
+          Auth, payments, APIs, infrastructure — all of it slows you down before you even get users.
+        </p>
+
+        <p style={{ opacity: 0.7 }}>
+          Flow OS removes that entire layer so you can focus on building and selling.
+        </p>
       </section>
 
-      {/* FEATURES */}
+      {/* VALUE STACK (NOT FEATURES) */}
       <section style={styles.grid}>
-        <div style={styles.card}>
-          ⚡ Instant SaaS Setup
-          <p>Go from idea to working product in minutes.</p>
-        </div>
+        <div style={styles.card}>✔ Launch SaaS without backend setup</div>
+        <div style={styles.card}>✔ Accept Stripe payments instantly</div>
+        <div style={styles.card}>✔ Automate workflows & users</div>
+        <div style={styles.card}>✔ Deploy production-ready systems in minutes</div>
+      </section>
 
-        <div style={styles.card}>
-          🤖 Automation Engine
-          <p>Run workflows, users, and logic automatically.</p>
-        </div>
+      {/* COMPARISON (HIGH ROAS BLOCK) */}
+      <section style={styles.compare}>
+        <h2>Stop building everything from scratch</h2>
 
-        <div style={styles.card}>
-          💳 Payments Built-In
-          <p>Stripe subscriptions ready out of the box.</p>
-        </div>
+        <div style={styles.table}>
+          <div>
+            <h3>Traditional way</h3>
+            <p>Weeks of backend setup</p>
+            <p>Stripe integration headaches</p>
+            <p>Auth + APIs + infrastructure</p>
+          </div>
 
-        <div style={styles.card}>
-          🔐 Production Ready
-          <p>Secure architecture built for scaling real apps.</p>
+          <div style={styles.highlightColumn}>
+            <h3>Flow OS</h3>
+            <p>Ready-made SaaS backend</p>
+            <p>Stripe built-in</p>
+            <p>Launch in minutes</p>
+          </div>
         </div>
       </section>
 
@@ -106,69 +114,68 @@ export default function Home() {
 
         <div style={styles.steps}>
           <div style={styles.card}>
-            <h3>1. Choose a system</h3>
-            <p>Select a prebuilt SaaS or automation template.</p>
+            1. Choose a SaaS template
           </div>
 
           <div style={styles.card}>
-            <h3>2. Connect Stripe</h3>
-            <p>Enable payments and subscriptions instantly.</p>
+            2. Connect Stripe in 1 click
           </div>
 
           <div style={styles.card}>
-            <h3>3. Launch & earn</h3>
-            <p>Your system runs and starts processing users automatically.</p>
+            3. Launch and start earning
           </div>
         </div>
+
+        <p style={{ opacity: 0.6 }}>
+          Your backend is already built. You just customize and launch.
+        </p>
       </section>
 
-      {/* PRICING (RESTRUCTURED PSYCHOLOGY) */}
+      {/* PRICING (ROAS STRUCTURE) */}
       <section style={styles.pricing}>
-        <h2>Simple pricing that scales with your growth</h2>
-        <p>Start small. Upgrade when you're making revenue.</p>
+        <h2>Simple pricing for builders</h2>
+        <p>Start free. Upgrade when you're ready to scale.</p>
 
         <div style={styles.pricingGrid}>
 
-          {/* STARTER */}
           <div style={styles.card}>
             <h3>Starter</h3>
-            <p style={styles.price}>$9/mo</p>
-            <p>For testing ideas and building your first system.</p>
-
-            <button style={styles.btn} onClick={() => checkout("starter")} disabled={loading}>
+            <p>$9/mo</p>
+            <p>For testing ideas</p>
+            <button style={styles.btn} onClick={() => checkout("starter")}>
               Start Starter
             </button>
           </div>
 
-          {/* GROWTH (PRIMARY FOCUS) */}
           <div style={styles.highlightCard}>
             <h3>Growth ⭐</h3>
-            <p style={styles.price}>$29/mo</p>
-            <p>Best for launching real SaaS products that generate revenue.</p>
-
-            <button style={styles.btn} onClick={() => checkout("growth")} disabled={loading}>
+            <p>$29/mo</p>
+            <p>Best for launching SaaS products</p>
+            <button style={styles.btn} onClick={() => checkout("growth")}>
               Choose Growth
             </button>
           </div>
 
-          {/* ELITE */}
           <div style={styles.card}>
             <h3>Elite</h3>
-            <p style={styles.price}>$79/mo</p>
-            <p>For agencies and scaling SaaS businesses.</p>
-
-            <button style={styles.btn} onClick={() => checkout("elite")} disabled={loading}>
+            <p>$79/mo</p>
+            <p>For agencies & scaling teams</p>
+            <button style={styles.btn} onClick={() => checkout("elite")}>
               Go Elite
             </button>
           </div>
 
         </div>
+
+        <p style={styles.afterPay}>
+          After checkout, your system is instantly active and ready to use.
+        </p>
       </section>
 
       {/* FINAL CTA */}
       <section style={styles.final}>
-        <h2>Ready to build your first SaaS?</h2>
-        <p>Start in minutes and launch something real today.</p>
+        <h2>Ready to launch your SaaS faster?</h2>
+        <p>Start building in minutes instead of weeks.</p>
 
         <button style={styles.primaryBtn} onClick={() => checkout("starter")}>
           Start now
@@ -184,7 +191,7 @@ export default function Home() {
 
       {/* FOOTER */}
       <footer style={styles.footer}>
-        Flow OS — Replace backend complexity. Ship faster. Earn sooner.
+        Flow OS — Replace backend complexity. Launch faster. Earn sooner.
       </footer>
     </main>
   );
@@ -201,27 +208,25 @@ const styles = {
   },
 
   hero: {
+    textAlign: "center",
     maxWidth: 900,
     margin: "0 auto",
-    textAlign: "center",
   },
 
   h1: {
-    fontSize: 52,
-    marginBottom: 12,
+    fontSize: 54,
   },
 
-  heroSub: {
+  subHero: {
     fontSize: 22,
     opacity: 0.9,
-    maxWidth: 780,
-    margin: "0 auto",
+    marginTop: 10,
   },
 
-  heroSmall: {
-    marginTop: 14,
+  mini: {
     fontSize: 14,
     opacity: 0.6,
+    marginTop: 10,
   },
 
   ctaRow: {
@@ -232,7 +237,7 @@ const styles = {
     flexWrap: "wrap",
   },
 
-  microTrust: {
+  trustLine: {
     marginTop: 18,
     fontSize: 12,
     opacity: 0.5,
@@ -242,23 +247,39 @@ const styles = {
     textAlign: "center",
     marginTop: 60,
     opacity: 0.7,
-    fontSize: 14,
   },
 
-  value: {
+  problem: {
     textAlign: "center",
-    marginTop: 80,
     maxWidth: 800,
-    marginLeft: "auto",
-    marginRight: "auto",
+    margin: "80px auto",
   },
 
   grid: {
-    maxWidth: 1000,
-    margin: "60px auto",
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
     gap: 20,
+    maxWidth: 1000,
+    margin: "60px auto",
+  },
+
+  compare: {
+    textAlign: "center",
+    marginTop: 80,
+  },
+
+  table: {
+    display: "flex",
+    justifyContent: "center",
+    gap: 40,
+    marginTop: 30,
+    flexWrap: "wrap",
+  },
+
+  highlightColumn: {
+    border: "2px solid #4f7cff",
+    padding: 20,
+    borderRadius: 12,
   },
 
   section: {
@@ -268,8 +289,8 @@ const styles = {
 
   steps: {
     display: "grid",
-    gap: 18,
-    maxWidth: 800,
+    gap: 15,
+    maxWidth: 700,
     margin: "40px auto",
   },
 
@@ -342,7 +363,9 @@ const styles = {
     cursor: "pointer",
   },
 
-  price: {
-    fontSize: 22,
+  afterPay: {
+    marginTop: 20,
+    opacity: 0.6,
+    fontSize: 13,
   },
 };
