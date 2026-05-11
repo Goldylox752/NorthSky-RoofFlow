@@ -1,1 +1,335 @@
-js id="g3i1mq" const crypto = require("crypto");  const stripe = require("../../lib/stripe"); const supabase = require("../../lib/supabase");  /* ===============================    CONFIG =============================== */ const BASE_URL =   process.env.CLIENT_URL?.trim() ||   process.env.NEXT_PUBLIC_BASE_URL?.trim();  if (!BASE_URL) {   throw new Error(     "Missing CLIENT_URL environment variable"   ); }  /* ===============================    SERVER PRICING (SOURCE OF TRUTH) =============================== */ const PRICES = Object.freeze({   starter: {     amount: 1000,     name: "Starter",   },    growth: {     amount: 2000,     name: "Growth",   },    elite: {     amount: 5000,     name: "Elite",   }, });  /* ===============================    HELPERS =============================== */ const clean = (value) => {   if (typeof value !== "string") {     return null;   }    const trimmed = value.trim();    return trimmed.length     ? trimmed     : null; };  const getClientIp = (req) => {   return (     req.headers["x-forwarded-for"]       ?.split(",")[0]       ?.trim() ||     req.ip ||     null   ); };  const generateIdempotencyKey = ({   userId,   plan,   amount, }) => {   return crypto     .createHash("sha256")     .update(       `${userId}:${plan}:${amount}`     )     .digest("hex"); };  /* ===============================    GET STRIPE CUSTOMER =============================== */ async function getStripeCustomer(   authId ) {   const { data, error } =     await supabase       .from("users")       .select(`         stripe_customer_id,         email       `)       .eq("auth_id", authId)       .single();    if (error) {     console.error(       "❌ Customer lookup failed:",       error     );      throw new Error(       "Customer lookup failed"     );   }    if (!data?.stripe_customer_id) {     throw new Error(       "Stripe customer not found"     );   }    return data; }  /* ===============================    CREATE CHECKOUT SESSION =============================== */ async function createSession({   customerId,   userId,   plan,   amount,   req, }) {   const idempotencyKey =     generateIdempotencyKey({       userId,       plan,       amount,     });    return stripe.checkout.sessions.create(     {       mode: "payment",        customer: customerId,        payment_method_types: [         "card",       ],        billing_address_collection:         "auto",        customer_update: {         address: "auto",         name: "auto",       },        line_items: [         {           quantity: 1,            price_data: {             currency: "usd",              unit_amount: amount,              product_data: {               name:                 `Flow OS — ${plan.toUpperCase()}`,                description:                 "AI backend + automation system access",             },           },         },       ],        metadata: {         auth_id: userId,         plan,         amount: String(amount),       },        success_url:         `${BASE_URL}` +         `/success?session_id={CHECKOUT_SESSION_ID}`,        cancel_url:         `${BASE_URL}/cancel`,        expires_at:         Math.floor(Date.now() / 1000) +         60 * 30, // 30 mins        allow_promotion_codes: true,     },      {       idempotencyKey,     }   ); }  /* ===============================    CHECKOUT HANDLER =============================== */ async function checkout(req, res) {   const startedAt = Date.now();    try {     const {       user,       plan,     } = req.body || {};      /* ===============================        VALIDATE USER     =============================== */     if (!user?.id) {       return res.status(401).json({         success: false,         error:           "Authentication required",       });     }      /* ===============================        VALIDATE PLAN     =============================== */     const selectedPlan =       clean(plan)?.toLowerCase() ||       "starter";      const pricing =       PRICES[selectedPlan];      if (!pricing) {       return res.status(400).json({         success: false,         error: "Invalid plan",       });     }      const {       amount,       name,     } = pricing;      /* ===============================        GET STRIPE CUSTOMER     =============================== */     const customer =       await getStripeCustomer(         user.id       );      /* ===============================        CREATE STRIPE SESSION     =============================== */     const session =       await createSession({         customerId:           customer.stripe_customer_id,          userId: user.id,          plan: selectedPlan,          amount,          req,       });      if (!session?.url) {       throw new Error(         "Stripe session creation failed"       );     }      /* ===============================        OPTIONAL AUDIT LOG     =============================== */     await supabase       .from("checkout_logs")       .insert([         {           auth_id: user.id,            stripe_session_id:             session.id,            plan: selectedPlan,            amount,            ip_address:             getClientIp(req),            user_agent:             req.headers[               "user-agent"             ] || null,            created_at:             new Date().toISOString(),         },       ]);      /* ===============================        SUCCESS RESPONSE     =============================== */     return res.status(200).json({       success: true,        checkout: {         url: session.url,         sessionId: session.id,          plan: selectedPlan,         planName: name,          amount,         currency: "usd",       },        meta: {         processingTimeMs:           Date.now() - startedAt,       },     });    } catch (err) {     console.error(       "❌ Checkout Error:",       err     );      return res.status(500).json({       success: false,       error: "Checkout failed",     });   } }  module.exports = checkout; 
+const crypto = require("crypto");
+
+const stripe = require("../../lib/stripe");
+const supabase = require("../../lib/supabase");
+
+/* ===============================
+   CONFIG
+=============================== */
+const BASE_URL =
+  process.env.CLIENT_URL?.trim() ||
+  process.env.NEXT_PUBLIC_BASE_URL?.trim();
+
+if (!BASE_URL) {
+  throw new Error(
+    "Missing CLIENT_URL environment variable"
+  );
+}
+
+/* ===============================
+   SERVER PRICING (SOURCE OF TRUTH)
+=============================== */
+const PRICES = Object.freeze({
+  starter: {
+    amount: 1000,
+    name: "Starter",
+  },
+
+  growth: {
+    amount: 2000,
+    name: "Growth",
+  },
+
+  elite: {
+    amount: 5000,
+    name: "Elite",
+  },
+});
+
+/* ===============================
+   HELPERS
+=============================== */
+const clean = (value) => {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+
+  return trimmed.length
+    ? trimmed
+    : null;
+};
+
+const getClientIp = (req) => {
+  return (
+    req.headers["x-forwarded-for"]
+      ?.split(",")[0]
+      ?.trim() ||
+    req.ip ||
+    null
+  );
+};
+
+const generateIdempotencyKey = ({
+  userId,
+  plan,
+  amount,
+}) => {
+  return crypto
+    .createHash("sha256")
+    .update(
+      `${userId}:${plan}:${amount}`
+    )
+    .digest("hex");
+};
+
+/* ===============================
+   GET STRIPE CUSTOMER
+=============================== */
+async function getStripeCustomer(
+  authId
+) {
+  const { data, error } =
+    await supabase
+      .from("users")
+      .select(`
+        stripe_customer_id,
+        email
+      `)
+      .eq("auth_id", authId)
+      .single();
+
+  if (error) {
+    console.error(
+      "❌ Customer lookup failed:",
+      error
+    );
+
+    throw new Error(
+      "Customer lookup failed"
+    );
+  }
+
+  if (!data?.stripe_customer_id) {
+    throw new Error(
+      "Stripe customer not found"
+    );
+  }
+
+  return data;
+}
+
+/* ===============================
+   CREATE CHECKOUT SESSION
+=============================== */
+async function createSession({
+  customerId,
+  userId,
+  plan,
+  amount,
+  req,
+}) {
+  const idempotencyKey =
+    generateIdempotencyKey({
+      userId,
+      plan,
+      amount,
+    });
+
+  return stripe.checkout.sessions.create(
+    {
+      mode: "payment",
+
+      customer: customerId,
+
+      payment_method_types: [
+        "card",
+      ],
+
+      billing_address_collection:
+        "auto",
+
+      customer_update: {
+        address: "auto",
+        name: "auto",
+      },
+
+      line_items: [
+        {
+          quantity: 1,
+
+          price_data: {
+            currency: "usd",
+
+            unit_amount: amount,
+
+            product_data: {
+              name:
+                `Flow OS — ${plan.toUpperCase()}`,
+
+              description:
+                "AI backend + automation system access",
+            },
+          },
+        },
+      ],
+
+      metadata: {
+        auth_id: userId,
+        plan,
+        amount: String(amount),
+      },
+
+      success_url:
+        `${BASE_URL}` +
+        `/success?session_id={CHECKOUT_SESSION_ID}`,
+
+      cancel_url:
+        `${BASE_URL}/cancel`,
+
+      expires_at:
+        Math.floor(Date.now() / 1000) +
+        60 * 30, // 30 mins
+
+      allow_promotion_codes: true,
+    },
+
+    {
+      idempotencyKey,
+    }
+  );
+}
+
+/* ===============================
+   CHECKOUT HANDLER
+=============================== */
+async function checkout(req, res) {
+  const startedAt = Date.now();
+
+  try {
+    const {
+      user,
+      plan,
+    } = req.body || {};
+
+    /* ===============================
+       VALIDATE USER
+    =============================== */
+    if (!user?.id) {
+      return res.status(401).json({
+        success: false,
+        error:
+          "Authentication required",
+      });
+    }
+
+    /* ===============================
+       VALIDATE PLAN
+    =============================== */
+    const selectedPlan =
+      clean(plan)?.toLowerCase() ||
+      "starter";
+
+    const pricing =
+      PRICES[selectedPlan];
+
+    if (!pricing) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid plan",
+      });
+    }
+
+    const {
+      amount,
+      name,
+    } = pricing;
+
+    /* ===============================
+       GET STRIPE CUSTOMER
+    =============================== */
+    const customer =
+      await getStripeCustomer(
+        user.id
+      );
+
+    /* ===============================
+       CREATE STRIPE SESSION
+    =============================== */
+    const session =
+      await createSession({
+        customerId:
+          customer.stripe_customer_id,
+
+        userId: user.id,
+
+        plan: selectedPlan,
+
+        amount,
+
+        req,
+      });
+
+    if (!session?.url) {
+      throw new Error(
+        "Stripe session creation failed"
+      );
+    }
+
+    /* ===============================
+       OPTIONAL AUDIT LOG
+    =============================== */
+    await supabase
+      .from("checkout_logs")
+      .insert([
+        {
+          auth_id: user.id,
+
+          stripe_session_id:
+            session.id,
+
+          plan: selectedPlan,
+
+          amount,
+
+          ip_address:
+            getClientIp(req),
+
+          user_agent:
+            req.headers[
+              "user-agent"
+            ] || null,
+
+          created_at:
+            new Date().toISOString(),
+        },
+      ]);
+
+    /* ===============================
+       SUCCESS RESPONSE
+    =============================== */
+    return res.status(200).json({
+      success: true,
+
+      checkout: {
+        url: session.url,
+        sessionId: session.id,
+
+        plan: selectedPlan,
+        planName: name,
+
+        amount,
+        currency: "usd",
+      },
+
+      meta: {
+        processingTimeMs:
+          Date.now() - startedAt,
+      },
+    });
+
+  } catch (err) {
+    console.error(
+      "❌ Checkout Error:",
+      err
+    );
+
+    return res.status(500).json({
+      success: false,
+      error: "Checkout failed",
+    });
+  }
+}
+
+module.exports = checkout;
