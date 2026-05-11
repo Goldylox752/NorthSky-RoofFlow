@@ -7,153 +7,102 @@ const { createClient } = require("@supabase/supabase-js");
    ENV VALIDATION
 ========================= */
 
-const required = [
-  "STRIPE_SECRET_KEY",
-  "STRIPE_WEBHOOK_SECRET",
-  "SUPABASE_URL",
-  "SUPABASE_SERVICE_ROLE_KEY",
-];
+const requiredEnv = (key) => {
+  const value = process.env[key]?.trim();
+  if (!value) throw new Error(`Missing env: ${key}`);
+  return value;
+};
 
-for (const key of required) {
-  if (!process.env[key]) {
-    throw new Error(
-      `Missing environment variable: ${key}`
-    );
-  }
+const stripe = new Stripe(requiredEnv("STRIPE_SECRET_KEY"), {
+  apiVersion: "2024-06-20",
+});
+
+const supabase = createClient(
+  requiredEnv("SUPABASE_URL"),
+  requiredEnv("SUPABASE_SERVICE_ROLE_KEY")
+);
+
+/* =========================
+   HELPERS
+========================= */
+
+async function markEvent(event, status, extra = {}) {
+  await supabase.from("stripe_events").upsert({
+    id: event.id,
+    type: event.type,
+    status,
+    updated_at: new Date().toISOString(),
+    ...extra,
+  });
 }
 
 /* =========================
-   STRIPE
+   BUSINESS LOGIC
 ========================= */
 
-const stripe = new Stripe(
-  process.env.STRIPE_SECRET_KEY,
-  {
-    apiVersion: "2024-06-20",
-  }
-);
-
-/* =========================
-   SUPABASE
-========================= */
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
-
-/* =========================
-   HANDLE EVENTS
-========================= */
-
-async function handleCheckoutCompleted(
-  session
-) {
-  const leadId =
-    session.metadata?.leadId;
-
-  const plan =
-    session.metadata?.plan;
+async function handleCheckoutCompleted(session) {
+  const leadId = session.metadata?.leadId;
+  const plan = session.metadata?.plan;
 
   if (!leadId || !plan) {
-    throw new Error(
-      "Missing metadata"
-    );
+    throw new Error("Missing metadata (leadId or plan)");
   }
 
-  const stripeCustomerId =
-    session.customer || null;
-
-  const customerEmail =
-    session.customer_details
-      ?.email || null;
-
-  const amount =
-    (session.amount_total || 0) /
-    100;
+  const payload = {
+    paid: true,
+    status: "paid",
+    plan,
+    customer_email: session.customer_details?.email || null,
+    stripe_customer_id: session.customer || null,
+    updated_at: new Date().toISOString(),
+  };
 
   /* =========================
-     UPDATE LEAD
+     UPDATE LEAD (SAFE UPDATE)
   ========================= */
 
-  const {
-    error: leadError,
-  } = await supabase
+  const { error: leadError } = await supabase
     .from("leads")
-    .update({
-      paid: true,
-      status: "paid",
-      plan,
-      customer_email:
-        customerEmail,
-      stripe_customer_id:
-        stripeCustomerId,
-      updated_at:
-        new Date().toISOString(),
-    })
+    .update(payload)
     .eq("id", leadId.trim());
 
-  if (leadError) {
-    throw leadError;
-  }
+  if (leadError) throw leadError;
 
   /* =========================
-     SAVE PAYMENT
+     UPSERT PAYMENT
   ========================= */
 
-  const {
-    error: paymentError,
-  } = await supabase
+  const { error: paymentError } = await supabase
     .from("payments")
     .upsert(
       {
         id: session.id,
-
         lead_id: leadId,
-
-        stripe_customer_id:
-          stripeCustomerId,
-
-        customer_email:
-          customerEmail,
-
-        amount,
-
-        currency:
-          session.currency ||
-          "usd",
-
+        stripe_customer_id: session.customer || null,
+        customer_email: session.customer_details?.email || null,
+        amount: (session.amount_total || 0) / 100,
+        currency: session.currency || "usd",
         status: "paid",
-
-        created_at:
-          new Date().toISOString(),
+        created_at: new Date().toISOString(),
       },
-      {
-        onConflict: "id",
-      }
+      { onConflict: "id" }
     );
 
-  if (paymentError) {
-    throw paymentError;
-  }
+  if (paymentError) throw paymentError;
 }
 
 /* =========================
-   MAIN HANDLER
+   EVENT ROUTER
 ========================= */
 
 async function processEvent(event) {
   switch (event.type) {
     case "checkout.session.completed":
-      await handleCheckoutCompleted(
-        event.data.object
-      );
+      await handleCheckoutCompleted(event.data.object);
       break;
 
     default:
-      console.log(
-        `Unhandled event: ${event.type}`
-      );
+      console.log(`Unhandled event: ${event.type}`);
   }
 }
 
@@ -163,87 +112,45 @@ async function processEvent(event) {
 
 router.post(
   "/",
-
-  express.raw({
-    type: "application/json",
-  }),
-
+  express.raw({ type: "application/json" }),
   async (req, res) => {
     let event;
 
     try {
-      const signature =
-        req.headers[
-          "stripe-signature"
-        ];
-
-      if (!signature) {
-        return res
-          .status(400)
-          .json({
-            error:
-              "Missing Stripe signature",
-          });
-      }
+      const sig = req.headers["stripe-signature"];
+      if (!sig) return res.status(400).send("Missing signature");
 
       /* =========================
-         VERIFY STRIPE EVENT
+         VERIFY STRIPE SIGNATURE
       ========================= */
 
-      event =
-        stripe.webhooks.constructEvent(
-          req.body,
-          signature,
-          process.env
-            .STRIPE_WEBHOOK_SECRET
-        );
-
-      console.log(
-        `Received Stripe event: ${event.type}`
+      event = stripe.webhooks.constructEvent(
+        req.body,
+        sig,
+        requiredEnv("STRIPE_WEBHOOK_SECRET")
       );
 
+      console.log("Stripe event:", event.type);
+
       /* =========================
-         IDEMPOTENCY CHECK
+         IDEMPOTENCY CHECK (IMPORTANT FIX)
       ========================= */
 
-      const {
-        data: existingEvent,
-      } = await supabase
+      const { data: existing } = await supabase
         .from("stripe_events")
         .select("status")
         .eq("id", event.id)
-        .single();
+        .maybeSingle();
 
-      if (
-        existingEvent?.status ===
-        "completed"
-      ) {
-        console.log(
-          `Skipping duplicate event: ${event.id}`
-        );
-
-        return res.json({
-          received: true,
-          duplicate: true,
-        });
+      if (existing?.status === "completed") {
+        return res.json({ received: true, duplicate: true });
       }
 
       /* =========================
-         SAVE PROCESSING EVENT
+         MARK PROCESSING
       ========================= */
 
-      await supabase
-        .from("stripe_events")
-        .upsert({
-          id: event.id,
-
-          type: event.type,
-
-          status: "processing",
-
-          created_at:
-            new Date().toISOString(),
-        });
+      await markEvent(event, "processing");
 
       /* =========================
          PROCESS EVENT
@@ -255,57 +162,26 @@ router.post(
          MARK COMPLETED
       ========================= */
 
-      await supabase
-        .from("stripe_events")
-        .update({
-          status: "completed",
-
-          processed_at:
-            new Date().toISOString(),
-        })
-        .eq("id", event.id);
-
-      console.log(
-        `Processed event: ${event.id}`
-      );
-
-      return res.json({
-        received: true,
+      await markEvent(event, "completed", {
+        processed_at: new Date().toISOString(),
       });
 
-    } catch (err) {
-      console.error(
-        "Webhook Error:",
-        err
-      );
+      return res.json({ received: true });
 
-      /* =========================
-         MARK FAILED
-      ========================= */
+    } catch (err) {
+      console.error("Webhook Error:", err.message);
 
       if (event?.id) {
-        await supabase
-          .from("stripe_events")
-          .update({
-            status: "failed",
-
-            error:
-              err.message,
-
-            failed_at:
-              new Date().toISOString(),
-          })
-          .eq("id", event.id);
+        await markEvent(event, "failed", {
+          error: err.message,
+          failed_at: new Date().toISOString(),
+        });
       }
 
-      return res
-        .status(500)
-        .json({
-          success: false,
-          error:
-            err.message ||
-            "Webhook failed",
-        });
+      return res.status(500).json({
+        success: false,
+        error: "Webhook failed",
+      });
     }
   }
 );
