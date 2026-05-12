@@ -1,48 +1,77 @@
 import { supabase } from "@/lib/supabase";
 
+/* ===============================
+   HELPERS
+=============================== */
+
+function nowISO() {
+  return new Date().toISOString();
+}
+
+function addMinutes(ms) {
+  return new Date(Date.now() + ms).toISOString();
+}
+
+/* ===============================
+   MAIN
+=============================== */
+
 export async function POST(req) {
+  const startedAt = Date.now();
+
   try {
     const { leadId, contractorId } = await req.json();
 
+    /* ===============================
+       VALIDATION
+    =============================== */
+
     if (!leadId || !contractorId) {
       return Response.json(
-        { success: false, error: "Missing data" },
+        {
+          success: false,
+          error: "Missing leadId or contractorId",
+        },
         { status: 400 }
       );
     }
 
-    const now = new Date().toISOString();
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+    const now = nowISO();
+    const lockExpiresAt = addMinutes(5 * 60 * 1000);
 
-    // ===============================
-    // 🔐 ATOMIC SAFE CLAIM (FIXED LOGIC)
-    // ===============================
-    const { data: updated, error } = await supabase
+    /* ===============================
+       1. ATOMIC CLAIM (RACE SAFE CORE)
+    =============================== */
+
+    const { data: lead, error } = await supabase
       .from("leads")
       .update({
         status: "assigned",
 
         assigned_contractor_id: contractorId,
-        lock_owner: contractorId,
 
+        lock_owner: contractorId,
         locked_at: now,
-        lock_expires_at: expiresAt,
+        lock_expires_at: lockExpiresAt,
       })
 
-      // ✅ TRUE RACE CONDITION PROTECTION
+      // 🔐 TRUE RACE CONDITION PROTECTION
       .eq("id", leadId)
-      .or("status.eq.new,status.eq.assigned")
 
-      // ⚠️ IMPORTANT: enforce expiry in same filter logic
-      .lte("lock_expires_at", now)
+      // Only allow claim if:
+      // - not already assigned OR lock expired
+      .or(
+        `status.eq.new,and(status.eq.assigned,lock_expires_at.lt.${now})`
+      )
 
       .select()
       .maybeSingle();
 
-    // ===============================
-    // ❌ FAILED CLAIM
-    // ===============================
-    if (error || !updated) {
+    /* ===============================
+       ❌ CLAIM FAILED
+    =============================== */
+
+    if (error || !lead) {
       return Response.json(
         {
           success: false,
@@ -52,9 +81,10 @@ export async function POST(req) {
       );
     }
 
-    // ===============================
-    // 📡 EVENT LOG (NON-BLOCKING)
-    // ===============================
+    /* ===============================
+       2. EVENT LOG (FIRE & FORGET)
+    =============================== */
+
     supabase
       .from("events")
       .insert({
@@ -63,18 +93,21 @@ export async function POST(req) {
         payload: {
           contractorId,
           locked_at: now,
+          expires_at: lockExpiresAt,
         },
       })
       .catch(() => {});
 
-    // ===============================
-    // RESPONSE
-    // ===============================
+    /* ===============================
+       3. RESPONSE
+    =============================== */
+
     return Response.json({
       success: true,
-      lead: updated,
+      lead,
       lockedBy: contractorId,
-      expiresAt,
+      expiresAt: lockExpiresAt,
+      latency_ms: Date.now() - startedAt,
     });
 
   } catch (err) {
@@ -83,7 +116,7 @@ export async function POST(req) {
     return Response.json(
       {
         success: false,
-        error: "Server error",
+        error: "INTERNAL_SERVER_ERROR",
       },
       { status: 500 }
     );
