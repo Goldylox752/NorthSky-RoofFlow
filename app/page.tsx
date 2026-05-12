@@ -7,24 +7,33 @@ import { useForm } from "@formspree/react";
 const FORM_ID = "xkoyyaej";
 
 /* -----------------------------
-   TELEGRAM CONFIG
+   TELEGRAM CONFIG (FIXED)
 ------------------------------*/
-const TG_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN";
-const TG_CHAT_ID = "YOUR_CHAT_ID";
+const TG_TOKEN = "PASTE_YOUR_REAL_BOT_TOKEN_HERE";
+const TG_CHAT_ID = "PASTE_YOUR_CHAT_ID_HERE";
 
 const sendTelegram = async (text: string) => {
   try {
-    await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: TG_CHAT_ID,
-        text,
-        parse_mode: "Markdown",
-      }),
-    });
-  } catch (e) {
-    console.log("Telegram error", e);
+    const res = await fetch(
+      `https://api.telegram.org/bot${TG_TOKEN}/sendMessage`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: TG_CHAT_ID,
+          text,
+          parse_mode: "Markdown",
+        }),
+      }
+    );
+
+    const data = await res.json();
+
+    if (!data.ok) {
+      console.error("Telegram API error:", data);
+    }
+  } catch (err) {
+    console.error("Telegram network error:", err);
   }
 };
 
@@ -64,8 +73,8 @@ export default function Home() {
   const [contactState, handleContactSubmit] = useForm(FORM_ID);
 
   /* -----------------------------
-     TRACK EVENTS (FORMSPREE)
-  ------------------------------*/
+     TRACK EVENTS
+------------------------------*/
   const trackEvent = async (event: string, data?: any) => {
     const formData = new FormData();
     formData.append("name", "Analytics Event");
@@ -82,7 +91,7 @@ export default function Home() {
 
   /* -----------------------------
      FALLBACK LEAD LOG
-  ------------------------------*/
+------------------------------*/
   const logLead = async (planId: string) => {
     const formData = new FormData();
     formData.append("name", "Checkout Lead");
@@ -99,7 +108,7 @@ export default function Home() {
 
   /* -----------------------------
      EXIT INTENT POPUP
-  ------------------------------*/
+------------------------------*/
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (e.clientY < 10) setShowPopup(true);
@@ -110,8 +119,8 @@ export default function Home() {
   }, []);
 
   /* -----------------------------
-     CHECKOUT FLOW
-  ------------------------------*/
+     CHECKOUT FLOW (FIXED)
+------------------------------*/
   const checkout = async (planId: string) => {
     if (loadingPlan) return;
 
@@ -122,7 +131,7 @@ export default function Home() {
       await trackEvent("checkout_click", { planId });
 
       await sendTelegram(
-        `💰 *Checkout Click*\nPlan: ${planId}`
+        `💰 Checkout Click\nPlan: ${planId}`
       );
 
       await logLead(planId);
@@ -140,7 +149,7 @@ export default function Home() {
 
       const url = res?.checkout?.url || res?.url;
 
-      if (!url) throw new Error("No checkout URL");
+      if (!url) throw new Error("No checkout URL returned");
 
       await trackEvent("checkout_redirect", { planId });
 
@@ -150,7 +159,10 @@ export default function Home() {
 
       window.location.assign(url);
     } catch (err: any) {
-      await trackEvent("checkout_error", { planId, error: err?.message });
+      await trackEvent("checkout_error", {
+        planId,
+        error: err?.message,
+      });
 
       await sendTelegram(
         `❌ Checkout Error\nPlan: ${planId}\nError: ${err?.message}`
@@ -163,13 +175,13 @@ export default function Home() {
   };
 
   /* -----------------------------
-     WRAPPED FORMS
-  ------------------------------*/
+     WRAPPED FORMS (FIXED)
+------------------------------*/
   const handleWaitlist = async (e: any) => {
     await handleWaitlistSubmit(e);
 
     await sendTelegram(
-      `🚀 *Waitlist Signup*\nEmail: ${e.target.email.value}`
+      `🚀 Waitlist Signup\nEmail: ${e.target.email.value}`
     );
   };
 
@@ -177,7 +189,7 @@ export default function Home() {
     await handleContactSubmit(e);
 
     await sendTelegram(
-      `📩 *Contact Message*\nEmail: ${e.target.email.value}`
+      `📩 Contact Message\nEmail: ${e.target.email.value}`
     );
   };
 
@@ -193,7 +205,10 @@ export default function Home() {
         </h1>
 
         <div style={styles.ctaRow}>
-          <button style={styles.primaryBtn} onClick={() => checkout("starter")}>
+          <button
+            style={styles.primaryBtn}
+            onClick={() => checkout("starter")}
+          >
             Start Building
           </button>
         </div>
@@ -226,7 +241,10 @@ export default function Home() {
             <h3>{plan.name}</h3>
             <p>{plan.price}</p>
 
-            <button onClick={() => checkout(plan.id)} style={styles.btn}>
+            <button
+              onClick={() => checkout(plan.id)}
+              style={styles.btn}
+            >
               {plan.cta}
             </button>
           </div>
@@ -255,6 +273,7 @@ export default function Home() {
 
             <form onSubmit={handleWaitlist} style={styles.form}>
               <input name="email" placeholder="Email" style={styles.input} />
+
               <button type="submit" style={styles.primaryBtn}>
                 Join Free
               </button>
