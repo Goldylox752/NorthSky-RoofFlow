@@ -1,1 +1,263 @@
-js id="a8p2vs" const router = require("express").Router(); const crypto = require("crypto");  const supabase = require("../lib/supabase"); const stripe = require("../lib/stripe");  const {   buildKey, } = require("../utils/idempotency");  const {   calculateScore,   getTier, } = require("../utils/scoring");  const {   calculatePrice, } = require("../services/pricingEngine");  /* ===============================    ENV VALIDATION =============================== */ if (!process.env.CLIENT_URL) {   throw new Error(     "Missing CLIENT_URL environment variable"   ); }  /* ===============================    HELPERS =============================== */ const clean = (value) => {   if (typeof value !== "string") {     return null;   }    const trimmed = value.trim();    return trimmed.length     ? trimmed     : null; };  const normalizeEmail = (email) => {   const cleaned = clean(email);    return cleaned     ? cleaned.toLowerCase()     : null; };  const sanitizeUTM = (value) => {   const cleaned = clean(value);    if (!cleaned) return null;    return cleaned.slice(0, 120); };  const createCheckoutSession = async ({   lead,   tier,   score,   price, }) => {   return stripe.checkout.sessions.create({     mode: "payment",      payment_method_types: ["card"],      billing_address_collection: "auto",      customer_creation: "always",      line_items: [       {         quantity: 1,          price_data: {           currency: "cad",            unit_amount: Math.round(             Number(price) * 100           ),            product_data: {             name: `NorthSky ${tier} Access`,              description:               "Lead automation + revenue system",           },         },       },     ],      metadata: {       leadId: lead.id,       tier,       score: String(score),       email: lead.email || "",     },      success_url:       `${process.env.CLIENT_URL}` +       `/success?session_id={CHECKOUT_SESSION_ID}`,      cancel_url:       `${process.env.CLIENT_URL}/cancel`,      expires_at:       Math.floor(Date.now() / 1000) +       60 * 30, // 30 mins   }); };  /* ===============================    CREATE LEAD + CHECKOUT =============================== */ router.post("/", async (req, res) => {   const startedAt = Date.now();    try {     /* ===============================        REQUEST BODY     =============================== */     let {       name,       email,       phone,       city,        utm_source,       utm_campaign,       utm_medium,     } = req.body || {};      /* ===============================        NORMALIZE INPUTS     =============================== */     name = clean(name);     email = normalizeEmail(email);     phone = clean(phone);     city = clean(city);      utm_source =       sanitizeUTM(utm_source);      utm_campaign =       sanitizeUTM(utm_campaign);      utm_medium =       sanitizeUTM(utm_medium);      /* ===============================        VALIDATION     =============================== */     if (!email && !phone) {       return res.status(400).json({         success: false,         error:           "Email or phone is required",       });     }      if (       email &&       !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(         email       )     ) {       return res.status(400).json({         success: false,         error: "Invalid email format",       });     }      /* ===============================        IDEMPOTENCY KEY     =============================== */     const idempotencyKey = buildKey(       email,       phone,       city     );      /* ===============================        CHECK EXISTING LEAD     =============================== */     const {       data: existingLead,       error: lookupError,     } = await supabase       .from("leads")       .select("*")       .eq(         "idempotency_key",         idempotencyKey       )       .maybeSingle();      if (lookupError) {       console.error(         "❌ Lead lookup error:",         lookupError       );        throw lookupError;     }      /* ===============================        RETURN EXISTING CHECKOUT     =============================== */     if (existingLead) {       return res.json({         success: true,         duplicate: true,          lead: existingLead,          checkout: {           leadId: existingLead.id,           sessionId:             existingLead.stripe_session_id ||             null,         },       });     }      /* ===============================        SCORING ENGINE     =============================== */     const score = calculateScore({       email,       phone,       city,     });      const tier = getTier(score);      const price = calculatePrice(       score,       city     );      /* ===============================        CREATE LEAD     =============================== */     const leadId = crypto.randomUUID();      const leadPayload = {       id: leadId,        // identity       name,       email,       phone,       city,        // status       status: "new",        // scoring       score,       tier,       price,        // dedupe       idempotency_key:         idempotencyKey,        // attribution       utm_source,       utm_campaign,       utm_medium,        source:         req.headers.origin ||         req.headers.referer ||         "direct",        // risk + metadata       ip_address:         req.headers["x-forwarded-for"] ||         req.ip ||         null,        user_agent:         req.headers["user-agent"] ||         null,        created_at:         new Date().toISOString(),     };      const {       data: lead,       error: insertError,     } = await supabase       .from("leads")       .insert([leadPayload])       .select()       .single();      if (insertError) {       console.error(         "❌ Lead insert error:",         insertError       );        throw insertError;     }      /* ===============================        STRIPE CHECKOUT SESSION     =============================== */     const session =       await createCheckoutSession({         lead,         tier,         score,         price,       });      /* ===============================        SAVE SESSION     =============================== */     const {       error: sessionUpdateError,     } = await supabase       .from("leads")       .update({         stripe_session_id:           session.id,       })       .eq("id", lead.id);      if (sessionUpdateError) {       console.error(         "⚠️ Failed to save Stripe session:",         sessionUpdateError       );     }      /* ===============================        SUCCESS RESPONSE     =============================== */     return res.status(201).json({       success: true,        lead,        checkout: {         url: session.url,         sessionId: session.id,         leadId: lead.id,         amount: price,         currency: "cad",         tier,       },        meta: {         processingTimeMs:           Date.now() - startedAt,       },     });    } catch (err) {     console.error(       "❌ LEAD ROUTE ERROR:",       err     );      return res.status(500).json({       success: false,       error: "Internal server error",     });   } });  module.exports = router; 
+const router = require("express").Router();
+const crypto = require("crypto");
+
+const supabase = require("../lib/supabase");
+const stripe = require("../lib/stripe");
+
+const { buildKey } = require("../utils/idempotency");
+const { calculateScore, getTier } = require("../utils/scoring");
+const { calculatePrice } = require("../services/pricingEngine");
+
+/* ===============================
+   ENV VALIDATION
+=============================== */
+
+if (!process.env.CLIENT_URL) {
+  throw new Error("Missing CLIENT_URL environment variable");
+}
+
+const TG_TOKEN = process.env.TG_TOKEN;
+const TG_CHAT_ID = process.env.TG_CHAT_ID;
+
+/* ===============================
+   TELEGRAM SERVICE (UPGRADED)
+=============================== */
+
+const sendTelegram = async (message) => {
+  try {
+    if (!TG_TOKEN || !TG_CHAT_ID) return;
+
+    await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: TG_CHAT_ID,
+        text: message,
+        parse_mode: "Markdown",
+      }),
+    });
+  } catch (err) {
+    console.error("Telegram error:", err);
+  }
+};
+
+/* ===============================
+   HELPERS
+=============================== */
+
+const clean = (v) => (typeof v === "string" ? v.trim() || null : null);
+
+const normalizeEmail = (email) =>
+  clean(email)?.toLowerCase() || null;
+
+const sanitizeUTM = (v) =>
+  clean(v)?.slice(0, 120) || null;
+
+/* ===============================
+   STRIPE CHECKOUT
+=============================== */
+
+const createCheckoutSession = async ({
+  lead,
+  tier,
+  score,
+  price,
+}) => {
+  return stripe.checkout.sessions.create({
+    mode: "payment",
+    payment_method_types: ["card"],
+    billing_address_collection: "auto",
+    customer_creation: "always",
+
+    line_items: [
+      {
+        quantity: 1,
+        price_data: {
+          currency: "cad",
+          unit_amount: Math.round(Number(price) * 100),
+          product_data: {
+            name: `NorthSky ${tier} Access`,
+            description: "AI SaaS automation system",
+          },
+        },
+      },
+    ],
+
+    metadata: {
+      leadId: lead.id,
+      tier,
+      score: String(score),
+      email: lead.email || "",
+    },
+
+    success_url: `${process.env.CLIENT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${process.env.CLIENT_URL}/cancel`,
+
+    expires_at: Math.floor(Date.now() / 1000) + 60 * 30,
+  });
+};
+
+/* ===============================
+   ROUTE
+=============================== */
+
+router.post("/", async (req, res) => {
+  const startedAt = Date.now();
+
+  try {
+    let {
+      name,
+      email,
+      phone,
+      city,
+      utm_source,
+      utm_campaign,
+      utm_medium,
+    } = req.body || {};
+
+    /* ---------- normalize ---------- */
+    name = clean(name);
+    email = normalizeEmail(email);
+    phone = clean(phone);
+    city = clean(city);
+
+    utm_source = sanitizeUTM(utm_source);
+    utm_campaign = sanitizeUTM(utm_campaign);
+    utm_medium = sanitizeUTM(utm_medium);
+
+    /* ---------- validation ---------- */
+    if (!email && !phone) {
+      return res.status(400).json({
+        success: false,
+        error: "Email or phone required",
+      });
+    }
+
+    /* ---------- idempotency ---------- */
+    const idempotencyKey = buildKey(email, phone, city);
+
+    const { data: existing } = await supabase
+      .from("leads")
+      .select("*")
+      .eq("idempotency_key", idempotencyKey)
+      .maybeSingle();
+
+    if (existing) {
+      return res.json({
+        success: true,
+        duplicate: true,
+        lead: existing,
+      });
+    }
+
+    /* ---------- scoring ---------- */
+    const score = calculateScore({ email, phone, city });
+    const tier = getTier(score);
+    const price = calculatePrice(score, city);
+
+    /* ---------- create lead ---------- */
+    const leadId = crypto.randomUUID();
+
+    const leadPayload = {
+      id: leadId,
+      name,
+      email,
+      phone,
+      city,
+
+      status: "new",
+
+      score,
+      tier,
+      price,
+
+      idempotency_key: idempotencyKey,
+
+      utm_source,
+      utm_campaign,
+      utm_medium,
+
+      source: req.headers.origin || "direct",
+
+      ip_address: req.headers["x-forwarded-for"] || req.ip,
+      user_agent: req.headers["user-agent"],
+
+      created_at: new Date().toISOString(),
+    };
+
+    const { data: lead } = await supabase
+      .from("leads")
+      .insert([leadPayload])
+      .select()
+      .single();
+
+    /* ===============================
+       🔥 TELEGRAM: NEW LEAD ALERT
+    =============================== */
+
+    await sendTelegram(
+      `🚀 *NEW LEAD*\n\n` +
+      `👤 ${lead.name || "N/A"}\n` +
+      `📧 ${lead.email || "N/A"}\n` +
+      `📍 ${lead.city || "N/A"}\n` +
+      `💰 Score: ${score}\n` +
+      `🏷 Tier: ${tier}\n` +
+      `💵 Price: $${price}`
+    );
+
+    /* ---------- stripe ---------- */
+    const session = await createCheckoutSession({
+      lead,
+      tier,
+      score,
+      price,
+    });
+
+    await supabase
+      .from("leads")
+      .update({ stripe_session_id: session.id })
+      .eq("id", lead.id);
+
+    /* ===============================
+       🔥 TELEGRAM: CHECKOUT CREATED
+    =============================== */
+
+    await sendTelegram(
+      `💳 *CHECKOUT READY*\n\n` +
+      `Lead: ${lead.id}\n` +
+      `Tier: ${tier}\n` +
+      `Amount: $${price}`
+    );
+
+    /* ---------- response ---------- */
+    return res.status(201).json({
+      success: true,
+      lead,
+      checkout: {
+        url: session.url,
+        sessionId: session.id,
+        leadId: lead.id,
+        amount: price,
+        tier,
+      },
+      meta: {
+        processingTimeMs: Date.now() - startedAt,
+      },
+    });
+
+  } catch (err) {
+    console.error("LEAD ERROR:", err);
+
+    await sendTelegram(
+      `❌ *SYSTEM ERROR*\n\n` +
+      `${err?.message || "Unknown error"}`
+    );
+
+    return res.status(500).json({
+      success: false,
+      error: "Internal server error",
+    });
+  }
+});
+
+module.exports = router;
