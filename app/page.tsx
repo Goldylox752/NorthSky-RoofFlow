@@ -6,37 +6,6 @@ import { useForm } from "@formspree/react";
 
 const FORM_ID = "xkoyyaej";
 
-/* -----------------------------
-   TELEGRAM (SECURE VERSION)
-------------------------------*/
-const TG_TOKEN = process.env.NEXT_PUBLIC_TG_TOKEN!;
-const TG_CHAT_ID = process.env.NEXT_PUBLIC_TG_CHAT_ID!;
-
-const sendTelegram = async (text: string) => {
-  try {
-    const res = await fetch(
-      `https://api.telegram.org/bot${TG_TOKEN}/sendMessage`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: TG_CHAT_ID,
-          text,
-          parse_mode: "Markdown",
-        }),
-      }
-    );
-
-    const data = await res.json();
-
-    if (!data.ok) {
-      console.error("Telegram API error:", data);
-    }
-  } catch (err) {
-    console.error("Telegram network error:", err);
-  }
-};
-
 const plans = [
   { id: "starter", name: "Starter", price: "$9/mo", cta: "Start Starter" },
   { id: "growth", name: "Growth", price: "$29/mo", cta: "Choose Growth", featured: true },
@@ -53,9 +22,6 @@ export default function Home() {
   const [waitlistState, handleWaitlistSubmit] = useForm(FORM_ID);
   const [contactState, handleContactSubmit] = useForm(FORM_ID);
 
-  /* -----------------------------
-     TRACK EVENTS
-  ------------------------------*/
   const trackEvent = async (event: string, data?: any) => {
     await fetch(`https://formspree.io/f/${FORM_ID}`, {
       method: "POST",
@@ -64,9 +30,6 @@ export default function Home() {
     });
   };
 
-  /* -----------------------------
-     CHECKOUT FLOW
-  ------------------------------*/
   const checkout = async (planId: string) => {
     if (loadingPlan) return;
 
@@ -75,8 +38,6 @@ export default function Home() {
 
     try {
       await trackEvent("checkout_click", { planId });
-
-      await sendTelegram(`💰 Checkout Click\nPlan: ${planId}`);
 
       const res = await api("/api/leads", {
         method: "POST",
@@ -91,40 +52,24 @@ export default function Home() {
 
       const url = res?.checkout?.url || res?.url;
 
-      if (!url) throw new Error("No checkout URL");
-
-      await sendTelegram(`🚀 Redirecting checkout\nPlan: ${planId}`);
+      if (!url) throw new Error("No checkout URL returned");
 
       window.location.assign(url);
     } catch (err: any) {
       setError(err?.message || "Checkout failed");
-
-      await sendTelegram(
-        `❌ Checkout Error\nPlan: ${planId}\nError: ${err?.message}`
-      );
     } finally {
       setLoadingPlan(null);
     }
   };
 
-  /* -----------------------------
-     FORMS (WAITLIST + CONTACT)
-  ------------------------------*/
   const handleWaitlist = async (e: any) => {
     await handleWaitlistSubmit(e);
-
-    await sendTelegram(`🚀 Waitlist Signup\nEmail: ${e.target.email.value}`);
   };
 
   const handleContact = async (e: any) => {
     await handleContactSubmit(e);
-
-    await sendTelegram(`📩 Contact Message\nEmail: ${e.target.email.value}`);
   };
 
-  /* -----------------------------
-     EXIT INTENT
-  ------------------------------*/
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (e.clientY < 10) setShowPopup(true);
@@ -172,7 +117,10 @@ export default function Home() {
             <h3>{p.name}</h3>
             <p>{p.price}</p>
 
-            <button onClick={() => checkout(p.id)} style={styles.btn}>
+            <button
+              onClick={() => checkout(p.id)}
+              style={styles.btn}
+            >
               {p.cta}
             </button>
           </div>
@@ -190,7 +138,7 @@ export default function Home() {
         </form>
       </section>
 
-      {/* POPUP */}
+      {/* EXIT POPUP */}
       {showPopup && (
         <div style={styles.popupOverlay}>
           <div style={styles.popup}>
