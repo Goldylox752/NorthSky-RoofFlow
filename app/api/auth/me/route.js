@@ -1,41 +1,29 @@
-import { cookies } from "next/headers";
 import { getSupabaseServer } from "@/lib/supabaseServer";
 
-export async function GET() {
+export async function GET(req) {
   try {
     const supabase = getSupabaseServer();
 
-    if (!supabase) {
-      return Response.json(
-        { error: "Supabase server not configured" },
-        { status: 500 }
-      );
+    const authHeader = req.headers.get("authorization");
+    const token = authHeader?.replace("Bearer ", "");
+
+    if (!token) {
+      return Response.json({ error: "Missing token" }, { status: 401 });
     }
 
-    /* ===============================
-       GET USER FROM SESSION COOKIE
-    =============================== */
     const {
       data: { user },
       error,
-    } = await supabase.auth.getUser();
+    } = await supabase.auth.getUser(token);
 
     if (error || !user) {
-      return Response.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return Response.json({ error: "Invalid token" }, { status: 401 });
     }
 
-    return Response.json({
-      user,
-    });
+    return Response.json({ user });
   } catch (err) {
     return Response.json(
-      {
-        error: "Server error",
-        details: err?.message || "unknown",
-      },
+      { error: "Server error" },
       { status: 500 }
     );
   }
