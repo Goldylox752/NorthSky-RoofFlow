@@ -1,28 +1,20 @@
 const { createClient } = require("@supabase/supabase-js");
 
 /* ===============================
-   SUPABASE CLIENT
+   SERVER SUPABASE CLIENT (IMPORTANT)
 =============================== */
 const supabase = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY // 🔥 IMPORTANT UPGRADE
 );
 
 /* ===============================
-   AUTH MIDDLEWARE (JWT)
+   AUTH MIDDLEWARE (SAAS READY)
 =============================== */
 module.exports = async function auth(req, res, next) {
   try {
     const authHeader = req.headers.authorization;
-
-    if (!authHeader) {
-      return res.status(401).json({
-        success: false,
-        error: "Missing Authorization header",
-      });
-    }
-
-    const token = authHeader.replace("Bearer ", "").trim();
+    const token = authHeader?.replace("Bearer ", "").trim();
 
     if (!token) {
       return res.status(401).json({
@@ -31,44 +23,72 @@ module.exports = async function auth(req, res, next) {
       });
     }
 
+    /* ===============================
+       VERIFY USER TOKEN
+    =============================== */
     const { data, error } = await supabase.auth.getUser(token);
 
     if (error || !data?.user) {
       return res.status(401).json({
         success: false,
-        error: "Invalid or expired token",
+        error: "Invalid session",
       });
     }
 
     const user = data.user;
 
     /* ===============================
-       OPTIONAL DB PROFILE LOOKUP
+       GET SAAS PROFILE
     =============================== */
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from("users")
-      .select("stripe_customer_id, status")
+      .select("stripe_customer_id, status, plan")
       .eq("auth_id", user.id)
       .maybeSingle();
 
+    if (profileError) {
+      console.error("Profile error:", profileError);
+    }
+
     /* ===============================
-       ATTACH USER TO REQUEST
+       HARD BLOCK (SAAS RULE)
+    =============================== */
+    if (!profile) {
+      return res.status(403).json({
+        success: false,
+        error: "User profile missing",
+      });
+    }
+
+    if (profile.status !== "active") {
+      return res.status(403).json({
+        success: false,
+        error: "Subscription inactive",
+        status: profile.status,
+      });
+    }
+
+    /* ===============================
+       ATTACH USER CONTEXT
     =============================== */
     req.user = {
       id: user.id,
-      email: user.email || null, // ✅ FIX: needed for Stripe checkout
-      stripe_customer_id: profile?.stripe_customer_id || null,
-      status: profile?.status || "unknown",
+      email: user.email,
+    };
+
+    req.saas = {
+      plan: profile.plan,
+      status: profile.status,
+      stripe_customer_id: profile.stripe_customer_id,
     };
 
     return next();
-
   } catch (err) {
     console.error("Auth error:", err);
 
-    return res.status(401).json({
+    return res.status(500).json({
       success: false,
-      error: "Authentication failed",
+      error: "auth_failed",
     });
   }
 };
