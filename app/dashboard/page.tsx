@@ -2,48 +2,86 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiGet } from "@/lib/api";
+import { getToken, clearToken } from "@/lib/auth";
+
+type User = {
+  email: string;
+  plan: string;
+  active: boolean;
+};
 
 export default function Dashboard() {
   const router = useRouter();
+
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    const user = localStorage.getItem("user_paid");
+    const checkAccess = async () => {
+      try {
+        const token = getToken();
 
-    if (!user) {
-      router.push("/");
-      return;
-    }
+        if (!token) {
+          router.push("/");
+          return;
+        }
 
-    setLoading(false);
-  }, []);
+        const res = await apiGet("/api/dashboard/access", token);
+
+        if (!res.ok) {
+          router.push("/");
+          return;
+        }
+
+        const data = await res.json();
+
+        if (!data.active) {
+          router.push("/");
+          return;
+        }
+
+        setUser(data);
+      } catch (err) {
+        console.error(err);
+        router.push("/");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkAccess();
+  }, [router]);
 
   if (loading) {
     return (
-      <div style={{ padding: 40, color: "#fff", background: "#0b0f17", minHeight: "100vh" }}>
+      <div style={{ padding: 40, minHeight: "100vh", background: "#0b0f17", color: "#fff" }}>
         Loading dashboard...
       </div>
     );
   }
 
-  return (
-    <main style={{ padding: 40, color: "#fff", background: "#0b0f17", minHeight: "100vh" }}>
-      <h1>Dashboard</h1>
+  if (!user) return null;
 
-      <p>Welcome to Flow OS</p>
+  return (
+    <main style={{ padding: 40, minHeight: "100vh", background: "#0b0f17", color: "#fff" }}>
+      <h1>Flow OS Dashboard</h1>
+
+      <p>Logged in as: {user.email}</p>
+      <p>Plan: {user.plan}</p>
 
       <div style={{ marginTop: 20 }}>
-        <h3>Your system status</h3>
+        <h3>System Status</h3>
         <ul>
-          <li>✅ Stripe connected</li>
-          <li>✅ Backend active</li>
-          <li>⚡ AI workflows ready</li>
+          <li>Stripe billing: Active</li>
+          <li>Backend API: Running</li>
+          <li>AI workflows: Enabled</li>
         </ul>
       </div>
 
       <button
         onClick={() => {
-          localStorage.removeItem("user_paid");
+          clearToken();
           router.push("/");
         }}
         style={{ marginTop: 20 }}
