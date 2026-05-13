@@ -2,10 +2,9 @@
 
 import { useState } from "react";
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || "";
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
-const plans = [
+const PLANS = [
   {
     id: "starter",
     name: "Starter",
@@ -27,61 +26,37 @@ const plans = [
 ];
 
 export default function Buy() {
-  const [loadingPlan, setLoadingPlan] =
-    useState<string | null>(null);
+  const [loadingPlan, setLoadingPlan] = useState(null);
+  const [error, setError] = useState("");
 
-  const [error, setError] =
-    useState("");
-
-  const buy = async (
-    planId: string
-  ) => {
+  const handleCheckout = async (planId) => {
     try {
       setError("");
       setLoadingPlan(planId);
 
       if (!API_URL) {
-        throw new Error(
-          "Missing NEXT_PUBLIC_API_URL"
-        );
+        throw new Error("Missing NEXT_PUBLIC_API_URL");
       }
 
-      const res = await fetch(
-        `${API_URL}/api/checkout`,
-        {
-          method: "POST",
+      const res = await fetch(`${API_URL}/api/checkout`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ plan: planId }),
+      });
 
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-
-          body: JSON.stringify({
-            plan: planId,
-          }),
-        }
-      );
-
-      const data =
-        await res.json();
+      const data = await res.json().catch(() => null);
 
       if (!res.ok || !data?.url) {
-        throw new Error(
-          data?.error ||
-            "Checkout failed"
-        );
+        throw new Error(data?.error || "Checkout failed");
       }
 
-      window.location.href =
-        data.url;
-    } catch (err: any) {
-      console.error(err);
+      window.location.href = data.url;
+    } catch (err) {
+      console.error("Checkout error:", err);
 
-      setError(
-        err.message ||
-          "Something went wrong"
-      );
-
+      setError(err?.message || "Something went wrong");
       setLoadingPlan(null);
     }
   };
@@ -89,60 +64,46 @@ export default function Buy() {
   return (
     <main style={styles.page}>
       <div style={styles.container}>
-        <h1 style={styles.title}>
-          Buy Roofing Leads
-        </h1>
+        <h1 style={styles.title}>Buy Roofing Leads</h1>
 
-        <p style={styles.sub}>
-          Secure Stripe checkout with
-          instant access to contractor
-          leads.
+        <p style={styles.subtitle}>
+          Secure Stripe checkout with instant access to verified contractor leads.
         </p>
 
-        {error && (
-          <div style={styles.error}>
-            ⚠️ {error}
-          </div>
-        )}
+        {error && <div style={styles.error}>⚠ {error}</div>}
 
-        {plans.map((plan) => (
-          <button
-            key={plan.id}
-            onClick={() =>
-              buy(plan.id)
-            }
-            disabled={
-              !!loadingPlan
-            }
-            style={{
-              ...styles.btn,
-              background:
-                plan.color,
-              opacity:
-                loadingPlan &&
-                loadingPlan !==
-                  plan.id
-                  ? 0.5
-                  : 1,
-            }}
-          >
-            {loadingPlan ===
-            plan.id
-              ? "Redirecting..."
-              : `${plan.name} — ${plan.price}`}
-          </button>
-        ))}
+        {PLANS.map((plan) => {
+          const isLoading = loadingPlan === plan.id;
+          const isDisabled = loadingPlan && !isLoading;
 
-        <p style={styles.note}>
-          Secure payments powered
-          by Stripe
-        </p>
+          return (
+            <button
+              key={plan.id}
+              onClick={() => handleCheckout(plan.id)}
+              disabled={isDisabled}
+              style={{
+                ...styles.button,
+                background: plan.color,
+                opacity: isDisabled ? 0.5 : 1,
+                cursor: isDisabled ? "not-allowed" : "pointer",
+              }}
+            >
+              {isLoading ? "Redirecting..." : `${plan.name} — ${plan.price}`}
+            </button>
+          );
+        })}
+
+        <p style={styles.footer}>Secure payments powered by Stripe</p>
       </div>
     </main>
   );
 }
 
-const styles: any = {
+/* ===============================
+   STYLES
+=============================== */
+
+const styles = {
   page: {
     minHeight: "100vh",
     background: "#0b0f17",
@@ -151,59 +112,52 @@ const styles: any = {
     justifyContent: "center",
     alignItems: "center",
     padding: 24,
-    fontFamily:
-      "system-ui, sans-serif",
+    fontFamily: "system-ui, sans-serif",
   },
 
   container: {
     width: "100%",
     maxWidth: 520,
-    background:
-      "rgba(17,24,39,0.9)",
+    background: "rgba(17,24,39,0.9)",
     padding: 32,
     borderRadius: 18,
-    border:
-      "1px solid rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.08)",
   },
 
   title: {
     fontSize: 42,
-    marginBottom: 12,
     fontWeight: 800,
+    marginBottom: 12,
   },
 
-  sub: {
+  subtitle: {
     opacity: 0.7,
     marginBottom: 28,
     lineHeight: 1.6,
   },
 
-  btn: {
+  button: {
     width: "100%",
     padding: 16,
     marginBottom: 14,
     color: "#fff",
     border: "none",
     borderRadius: 12,
-    cursor: "pointer",
     fontWeight: 700,
     fontSize: 16,
-    transition:
-      "all 0.2s ease",
+    transition: "all 0.2s ease",
   },
 
   error: {
-    background:
-      "rgba(127,29,29,0.3)",
-    border:
-      "1px solid rgba(239,68,68,0.3)",
+    background: "rgba(127,29,29,0.3)",
+    border: "1px solid rgba(239,68,68,0.3)",
     color: "#fca5a5",
     padding: 14,
     borderRadius: 10,
     marginBottom: 18,
   },
 
-  note: {
+  footer: {
     marginTop: 18,
     fontSize: 13,
     opacity: 0.5,
