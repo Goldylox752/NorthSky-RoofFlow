@@ -4,32 +4,28 @@ const stripe = require("../../lib/stripe");
 const supabase = require("../../lib/supabase");
 
 /* ===============================
-   CONFIG
+   ENV CONFIG
 =============================== */
-const BASE_URL =
-  process.env.CLIENT_URL?.trim() ||
-  process.env.NEXT_PUBLIC_BASE_URL?.trim();
+
+const BASE_URL = process.env.CLIENT_URL?.trim();
 
 if (!BASE_URL) {
-  throw new Error(
-    "Missing CLIENT_URL environment variable"
-  );
+  throw new Error("Missing CLIENT_URL environment variable");
 }
 
 /* ===============================
-   SERVER PRICING (SOURCE OF TRUTH)
+   PRICING (SERVER SOURCE OF TRUTH)
 =============================== */
+
 const PRICES = Object.freeze({
   starter: {
     amount: 1000,
     name: "Starter",
   },
-
   growth: {
     amount: 2000,
     name: "Growth",
   },
-
   elite: {
     amount: 5000,
     name: "Elite",
@@ -39,152 +35,91 @@ const PRICES = Object.freeze({
 /* ===============================
    HELPERS
 =============================== */
-const clean = (value) => {
-  if (typeof value !== "string") {
-    return null;
-  }
 
-  const trimmed = value.trim();
+const clean = (v) =>
+  typeof v === "string" && v.trim().length > 0 ? v.trim() : null;
 
-  return trimmed.length
-    ? trimmed
-    : null;
-};
+const getIp = (req) =>
+  req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+  req.ip ||
+  null;
 
-const getClientIp = (req) => {
-  return (
-    req.headers["x-forwarded-for"]
-      ?.split(",")[0]
-      ?.trim() ||
-    req.ip ||
-    null
-  );
-};
-
-const generateIdempotencyKey = ({
-  userId,
-  plan,
-  amount,
-}) => {
-  return crypto
+const generateIdempotencyKey = ({ userId, plan, amount }) =>
+  crypto
     .createHash("sha256")
-    .update(
-      `${userId}:${plan}:${amount}`
-    )
+    .update(`${userId}:${plan}:${amount}`)
     .digest("hex");
-};
 
 /* ===============================
    GET STRIPE CUSTOMER
 =============================== */
-async function getStripeCustomer(
-  authId
-) {
-  const { data, error } =
-    await supabase
-      .from("users")
-      .select(`
-        stripe_customer_id,
-        email
-      `)
-      .eq("auth_id", authId)
-      .single();
 
-  if (error) {
-    console.error(
-      "❌ Customer lookup failed:",
-      error
-    );
+async function getStripeCustomer(authId) {
+  const { data, error } = await supabase
+    .from("users")
+    .select("stripe_customer_id, email")
+    .eq("auth_id", authId)
+    .maybeSingle();
 
-    throw new Error(
-      "Customer lookup failed"
-    );
-  }
-
-  if (!data?.stripe_customer_id) {
-    throw new Error(
-      "Stripe customer not found"
-    );
-  }
+  if (error) throw new Error("Customer lookup failed");
+  if (!data?.stripe_customer_id) throw new Error("Missing Stripe customer");
 
   return data;
 }
 
 /* ===============================
-   CREATE CHECKOUT SESSION
+   CREATE STRIPE SESSION
 =============================== */
-async function createSession({
+
+async function createStripeSession({
   customerId,
-  userId,
+  authId,
   plan,
   amount,
-  req,
 }) {
-  const idempotencyKey =
-    generateIdempotencyKey({
-      userId,
-      plan,
-      amount,
-    });
+  const idempotencyKey = generateIdempotencyKey({
+    userId: authId,
+    plan,
+    amount,
+  });
 
   return stripe.checkout.sessions.create(
     {
       mode: "payment",
 
       customer: customerId,
+      customer_creation: "always",
 
-      payment_method_types: [
-        "card",
-      ],
+      payment_method_types: ["card"],
 
-      billing_address_collection:
-        "auto",
-
-      customer_update: {
-        address: "auto",
-        name: "auto",
-      },
+      billing_address_collection: "auto",
+      allow_promotion_codes: true,
 
       line_items: [
         {
           quantity: 1,
-
           price_data: {
             currency: "usd",
-
             unit_amount: amount,
-
             product_data: {
-              name:
-                `Flow OS — ${plan.toUpperCase()}`,
-
-              description:
-                "AI backend + automation system access",
+              name: `Flow OS — ${plan.toUpperCase()}`,
+              description: "SaaS access + automation platform",
             },
           },
         },
       ],
 
       metadata: {
-        auth_id: userId,
+        auth_id: authId,
         plan,
         amount: String(amount),
       },
 
-      success_url:
-        `${BASE_URL}` +
-        `/success?session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${BASE_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${BASE_URL}/cancel`,
 
-      cancel_url:
-        `${BASE_URL}/cancel`,
-
-      expires_at:
-        Math.floor(Date.now() / 1000) +
-        60 * 30, // 30 mins
-
-      allow_promotion_codes: true,
+      expires_at: Math.floor(Date.now() / 1000) + 60 * 30,
     },
-
     {
       idempotencyKey,
     }
@@ -192,37 +127,32 @@ async function createSession({
 }
 
 /* ===============================
-   CHECKOUT HANDLER
+   CHECKOUT CONTROLLER
 =============================== */
+
 async function checkout(req, res) {
   const startedAt = Date.now();
 
   try {
-    const {
-      user,
-      plan,
-    } = req.body || {};
-
     /* ===============================
-       VALIDATE USER
+       AUTH (MUST COME FROM MIDDLEWARE)
     =============================== */
+
+    const user = req.user;
+
     if (!user?.id) {
       return res.status(401).json({
         success: false,
-        error:
-          "Authentication required",
+        error: "Unauthorized",
       });
     }
 
     /* ===============================
-       VALIDATE PLAN
+       PLAN VALIDATION
     =============================== */
-    const selectedPlan =
-      clean(plan)?.toLowerCase() ||
-      "starter";
 
-    const pricing =
-      PRICES[selectedPlan];
+    const plan = clean(req.body?.plan)?.toLowerCase() || "starter";
+    const pricing = PRICES[plan];
 
     if (!pricing) {
       return res.status(400).json({
@@ -231,103 +161,64 @@ async function checkout(req, res) {
       });
     }
 
-    const {
-      amount,
-      name,
-    } = pricing;
-
     /* ===============================
        GET STRIPE CUSTOMER
     =============================== */
-    const customer =
-      await getStripeCustomer(
-        user.id
-      );
+
+    const customer = await getStripeCustomer(user.id);
 
     /* ===============================
-       CREATE STRIPE SESSION
+       CREATE SESSION
     =============================== */
-    const session =
-      await createSession({
-        customerId:
-          customer.stripe_customer_id,
 
-        userId: user.id,
-
-        plan: selectedPlan,
-
-        amount,
-
-        req,
-      });
+    const session = await createStripeSession({
+      customerId: customer.stripe_customer_id,
+      authId: user.id,
+      plan,
+      amount: pricing.amount,
+    });
 
     if (!session?.url) {
-      throw new Error(
-        "Stripe session creation failed"
-      );
+      throw new Error("Stripe session failed");
     }
 
     /* ===============================
-       OPTIONAL AUDIT LOG
+       AUDIT LOG (NON-BLOCKING)
     =============================== */
-    await supabase
-      .from("checkout_logs")
-      .insert([
-        {
-          auth_id: user.id,
 
-          stripe_session_id:
-            session.id,
-
-          plan: selectedPlan,
-
-          amount,
-
-          ip_address:
-            getClientIp(req),
-
-          user_agent:
-            req.headers[
-              "user-agent"
-            ] || null,
-
-          created_at:
-            new Date().toISOString(),
-        },
-      ]);
+    supabase.from("checkout_logs").insert({
+      auth_id: user.id,
+      stripe_session_id: session.id,
+      plan,
+      amount: pricing.amount,
+      ip_address: getIp(req),
+      user_agent: req.headers["user-agent"] || null,
+      created_at: new Date().toISOString(),
+    });
 
     /* ===============================
-       SUCCESS RESPONSE
+       RESPONSE
     =============================== */
-    return res.status(200).json({
-      success: true,
 
+    return res.json({
+      success: true,
       checkout: {
         url: session.url,
         sessionId: session.id,
-
-        plan: selectedPlan,
-        planName: name,
-
-        amount,
+        plan,
+        amount: pricing.amount,
         currency: "usd",
       },
-
       meta: {
-        processingTimeMs:
-          Date.now() - startedAt,
+        processingTimeMs: Date.now() - startedAt,
       },
     });
-
   } catch (err) {
-    console.error(
-      "❌ Checkout Error:",
-      err
-    );
+    console.error("Checkout error:", err);
 
     return res.status(500).json({
       success: false,
-      error: "Checkout failed",
+      error: err.message || "Checkout failed",
     });
   }
 }
