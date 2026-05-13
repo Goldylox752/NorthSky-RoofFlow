@@ -1,23 +1,55 @@
 const { createClient } = require("@supabase/supabase-js");
 
 /* ===============================
-   AUTH CLIENT (SAFE FOR JWT VERIFICATION)
+   SUPABASE CLIENTS
 =============================== */
 const supabaseAuth = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_ANON_KEY
 );
 
-/* ===============================
-   ADMIN CLIENT (DB ACCESS)
-=============================== */
 const supabaseAdmin = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
 /* ===============================
-   AUTH MIDDLEWARE (PRODUCTION SAAS)
+   FEATURE FLAGS (plug-in ready)
+=============================== */
+const FEATURES = {
+  starter: {
+    ai_scoring: true,
+    lead_export: false,
+    priority_routing: false,
+    api_access: false,
+  },
+  growth: {
+    ai_scoring: true,
+    lead_export: true,
+    priority_routing: true,
+    api_access: false,
+  },
+  elite: {
+    ai_scoring: true,
+    lead_export: true,
+    priority_routing: true,
+    api_access: true,
+  },
+};
+
+/* ===============================
+   HELPERS
+=============================== */
+function getFeatures(plan) {
+  return FEATURES?.[plan] || {};
+}
+
+function hasFeature(plan, feature) {
+  return Boolean(FEATURES?.[plan]?.[feature]);
+}
+
+/* ===============================
+   AUTH MIDDLEWARE
 =============================== */
 module.exports = async function auth(req, res, next) {
   try {
@@ -26,57 +58,61 @@ module.exports = async function auth(req, res, next) {
     if (!token) {
       return res.status(401).json({
         success: false,
-        error: "Missing token",
+        error: "missing_token",
       });
     }
 
     /* ===============================
-       VERIFY JWT (SUPABASE AUTH)
+       VERIFY USER (SUPABASE JWT)
     =============================== */
     const { data, error } = await supabaseAuth.auth.getUser(token);
 
     if (error || !data?.user) {
       return res.status(401).json({
         success: false,
-        error: "Invalid session",
+        error: "invalid_session",
       });
     }
 
-    const user = data.user;
+    const authUser = data.user;
 
     /* ===============================
-       FETCH SAAS PROFILE (ADMIN CLIENT)
+       FETCH SAAS PROFILE
     =============================== */
-    const { data: profile } = await supabaseAdmin
+    const { data: profile, error: profileError } = await supabaseAdmin
       .from("users")
       .select("plan, status, stripe_customer_id")
-      .eq("auth_id", user.id)
+      .eq("auth_id", authUser.id)
       .maybeSingle();
 
-    /* ===============================
-       HARD FAIL SAFETY
-    =============================== */
+    if (profileError) {
+      return res.status(500).json({
+        success: false,
+        error: "profile_fetch_failed",
+      });
+    }
+
     if (!profile) {
       return res.status(403).json({
         success: false,
-        error: "User profile missing",
+        error: "user_profile_missing",
       });
     }
 
     if (profile.status !== "active") {
       return res.status(403).json({
         success: false,
-        error: "Subscription inactive",
+        error: "subscription_inactive",
         status: profile.status,
       });
     }
 
     /* ===============================
-       ATTACH CONTEXT
+       CONTEXT ATTACHMENT
     =============================== */
     req.user = {
-      id: user.id,
-      email: user.email,
+      id: authUser.id,
+      email: authUser.email,
     };
 
     req.saas = {
@@ -85,9 +121,15 @@ module.exports = async function auth(req, res, next) {
       stripe_customer_id: profile.stripe_customer_id,
     };
 
+    /* ===============================
+       FEATURE LAYER (NEW)
+    =============================== */
+    req.features = getFeatures(profile.plan);
+    req.hasFeature = (feature) => hasFeature(profile.plan, feature);
+
     next();
   } catch (err) {
-    console.error("Auth error:", err);
+    console.error("Auth middleware error:", err);
 
     return res.status(500).json({
       success: false,
