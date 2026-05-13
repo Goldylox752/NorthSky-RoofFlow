@@ -1,69 +1,28 @@
-"use client";
+// lib/api/auth.ts
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://your-backend.com";
 
-import { useEffect, useState } from "react";
-import * as authAPI from "@/lib/api/auth";
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    credentials: "include", // for cookies/session
+    headers: { "Content-Type": "application/json" },
+    ...options,
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
 
-/* ===============================
-   AUTH HOOK
-=============================== */
-export function useAuth() {
-  const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+export async function getMe() {
+  return request("/auth/me");
+}
 
-/* ===============================
-   LOAD CURRENT USER
-=============================== */
-  const loadUser = async () => {
-    try {
-      const res = await authAPI.getMe();
-      setUser(res?.user || null);
-    } catch {
-      setUser(null);
-    } finally {
-      setLoading(false);
-    }
-  };
+export async function login(data: { email: string; password: string }) {
+  return request("/auth/login", { method: "POST", body: JSON.stringify(data) });
+}
 
-/* ===============================
-   LOGIN
-=============================== */
-  const login = async (email: string, password?: string) => {
-    const res = await authAPI.login({ email, password });
-    await loadUser();
-    return res;
-  };
+export async function signup(data: { email: string; password: string; name?: string }) {
+  return request("/auth/signup", { method: "POST", body: JSON.stringify(data) });
+}
 
-/* ===============================
-   SIGNUP
-=============================== */
-  const signup = async (email: string, password?: string, name?: string) => {
-    const res = await authAPI.signup({ email, password, name });
-    await loadUser();
-    return res;
-  };
-
-/* ===============================
-   LOGOUT
-=============================== */
-  const logout = async () => {
-    await authAPI.logout();
-    setUser(null);
-  };
-
-/* ===============================
-   INIT
-=============================== */
-  useEffect(() => {
-    loadUser();
-  }, []);
-
-  return {
-    user,
-    loading,
-    isAuthenticated: !!user,
-    login,
-    signup,
-    logout,
-    refresh: loadUser,
-  };
+export async function logout() {
+  return request("/auth/logout", { method: "POST" });
 }
