@@ -2,11 +2,12 @@ require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
+const rateLimit = require("express-rate-limit");
 
 const app = express();
 
 /* ===============================
-   TRUST PROXY
+   TRUST PROXY (Render / SaaS safe)
 =============================== */
 app.set("trust proxy", 1);
 
@@ -16,7 +17,17 @@ app.set("trust proxy", 1);
 app.disable("x-powered-by");
 
 /* ===============================
-   CORS (SAAS SAFE)
+   RATE LIMIT (ANTI ABUSE)
+=============================== */
+const limiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 120, // requests per IP
+});
+
+app.use(limiter);
+
+/* ===============================
+   CORS (SAFER SAAS CONFIG)
 =============================== */
 const allowedOrigins = new Set([
   process.env.FRONTEND_URL,
@@ -27,17 +38,29 @@ app.use(
   cors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
-      if (allowedOrigins.has(origin)) return callback(null, true);
-      return callback(new Error("CORS blocked"));
+
+      if (allowedOrigins.has(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(null, false);
     },
     credentials: true,
   })
 );
 
 /* ===============================
-   BODY PARSERS
+   BODY PARSING
 =============================== */
 app.use(express.json({ limit: "2mb" }));
+
+/* ===============================
+   REQUEST LOGGING (DEBUG SAFE)
+=============================== */
+app.use((req, res, next) => {
+  console.log(`[${req.method}] ${req.path}`);
+  next();
+});
 
 /* ===============================
    ROUTES
@@ -69,7 +92,7 @@ app.get("/", (req, res) => {
 });
 
 /* ===============================
-   404
+   404 HANDLER
 =============================== */
 app.use((req, res) => {
   res.status(404).json({
@@ -79,7 +102,7 @@ app.use((req, res) => {
 });
 
 /* ===============================
-   ERROR HANDLER
+   GLOBAL ERROR HANDLER
 =============================== */
 app.use((err, req, res, next) => {
   console.error("🔥 ERROR:", err);
