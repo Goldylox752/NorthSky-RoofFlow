@@ -5,15 +5,12 @@ const supabase = require("../lib/supabase");
 const auth = require("../../middleware/auth.middleware");
 
 /* ===============================
-   CREATE BILLING PORTAL SESSION
+   STRIPE BILLING PORTAL
 =============================== */
 router.post("/portal", auth, async (req, res) => {
   try {
-    const userId = req.user?.id;
+    const userId = req.user.id;
 
-    /* ===============================
-       VALIDATION
-    =============================== */
     if (!userId) {
       return res.status(401).json({
         success: false,
@@ -22,7 +19,7 @@ router.post("/portal", auth, async (req, res) => {
     }
 
     /* ===============================
-       GET STRIPE CUSTOMER ID
+       GET STRIPE CUSTOMER
     =============================== */
     const { data: user, error } = await supabase
       .from("users")
@@ -41,12 +38,22 @@ router.post("/portal", auth, async (req, res) => {
     if (!user?.stripe_customer_id) {
       return res.status(404).json({
         success: false,
-        error: "No Stripe customer found",
+        error: "Stripe customer not found",
       });
     }
 
     /* ===============================
-       CREATE STRIPE PORTAL SESSION
+       SAFETY CHECK
+    =============================== */
+    if (!process.env.FRONTEND_URL) {
+      return res.status(500).json({
+        success: false,
+        error: "Missing FRONTEND_URL env",
+      });
+    }
+
+    /* ===============================
+       CREATE PORTAL SESSION
     =============================== */
     const session = await stripe.billingPortal.sessions.create({
       customer: user.stripe_customer_id,
