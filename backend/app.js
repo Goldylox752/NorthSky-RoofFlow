@@ -3,6 +3,8 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const rateLimit = require("express-rate-limit");
+const crypto = require("crypto");
+const logger = require("./lib/logger"); // 👈 NEW
 
 const app = express();
 
@@ -20,6 +22,15 @@ app.disable("x-powered-by");
    BODY PARSER
 =============================== */
 app.use(express.json({ limit: "2mb" }));
+
+/* ===============================
+   REQUEST ID MIDDLEWARE (CRITICAL FOR SAAS)
+=============================== */
+app.use((req, res, next) => {
+  req.id = crypto.randomUUID();
+  res.setHeader("x-request-id", req.id);
+  next();
+});
 
 /* ===============================
    RATE LIMITING (PRODUCTION SAFE)
@@ -47,14 +58,12 @@ const allowedOrigins = new Set(
 app.use(
   cors({
     origin: (origin, callback) => {
-      // allow server-to-server / curl / stripe webhooks
       if (!origin) return callback(null, true);
 
       if (allowedOrigins.has(origin)) {
         return callback(null, true);
       }
 
-      // IMPORTANT: fail CLOSED in production SaaS (security upgrade)
       return callback(new Error("CORS blocked"), false);
     },
     credentials: true,
@@ -62,10 +71,18 @@ app.use(
 );
 
 /* ===============================
-   REQUEST LOGGER
+   REQUEST LOGGER (UPGRADED)
 =============================== */
 app.use((req, res, next) => {
-  console.log(`${req.method} ${req.path}`);
+  logger.info(
+    {
+      method: req.method,
+      path: req.path,
+      requestId: req.id,
+    },
+    "Incoming request"
+  );
+
   next();
 });
 
@@ -76,7 +93,7 @@ const safeRoute = (path) => {
   try {
     return require(path);
   } catch (err) {
-    console.warn(`Missing route: ${path}`);
+    logger.warn({ path }, "Missing route file");
     return express.Router();
   }
 };
@@ -93,6 +110,8 @@ app.use("/api/telegram", safeRoute("./routes/telegramWebhook"));
    HEALTH CHECK
 =============================== */
 app.get("/health", (req, res) => {
+  logger.info({ requestId: req.id }, "Health check");
+
   res.status(200).json({
     success: true,
     status: "healthy",
@@ -117,6 +136,15 @@ app.get("/", (req, res) => {
    404 HANDLER
 =============================== */
 app.use((req, res) => {
+  logger.warn(
+    {
+      method: req.method,
+      path: req.path,
+      requestId: req.id,
+    },
+    "Route not found"
+  );
+
   res.status(404).json({
     success: false,
     error: "Route not found",
@@ -127,11 +155,19 @@ app.use((req, res) => {
    GLOBAL ERROR HANDLER
 =============================== */
 app.use((err, req, res, next) => {
-  console.error("SERVER ERROR:", err);
+  logger.error(
+    {
+      err: err.message,
+      stack: err.stack,
+      requestId: req.id,
+    },
+    "Server error"
+  );
 
   res.status(500).json({
     success: false,
     error: "Internal server error",
+    requestId: req.id,
   });
 });
 
