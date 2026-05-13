@@ -10,7 +10,7 @@ const webhookUrl = process.env.WEBHOOK_URL;
 const PORT = process.env.PORT || 3000;
 
 if (!token || !webhookUrl) {
-  console.error("❌ Missing TELEGRAM_BOT_TOKEN or WEBHOOK_URL");
+  console.error("Missing TELEGRAM_BOT_TOKEN or WEBHOOK_URL");
   process.exit(1);
 }
 
@@ -34,9 +34,9 @@ const webhookPath = `/bot${token}`;
    SET COMMANDS (TELEGRAM UI MENU)
 =============================== */
 bot.setMyCommands([
-  { command: "start", description: "🚀 Start bot" },
-  { command: "help", description: "🧠 Help menu" },
-  { command: "ping", description: "🏓 Check bot status" }
+  { command: "start", description: "Start bot" },
+  { command: "help", description: "Help menu" },
+  { command: "ping", description: "Check bot status" }
 ]);
 
 /* ===============================
@@ -44,7 +44,7 @@ bot.setMyCommands([
 =============================== */
 bot.setWebHook(`${webhookUrl}${webhookPath}`);
 
-console.log("🔗 Webhook set to:", `${webhookUrl}${webhookPath}`);
+console.log("Webhook set to:", `${webhookUrl}${webhookPath}`);
 
 /* ===============================
    COMMAND HANDLERS
@@ -52,19 +52,19 @@ console.log("🔗 Webhook set to:", `${webhookUrl}${webhookPath}`);
 bot.onText(/\/start/, (msg) => {
   bot.sendMessage(
     msg.chat.id,
-    "🚀 Webhook Bot Online (Production Mode)"
+    "Webhook Bot Online (Production Mode)"
   );
 });
 
 bot.onText(/\/help/, (msg) => {
   bot.sendMessage(
     msg.chat.id,
-    "🧠 Commands:\n/start\n/help\n/ping"
+    "Commands:\n/start\n/help\n/ping"
   );
 });
 
 bot.onText(/\/ping/, (msg) => {
-  bot.sendMessage(msg.chat.id, "🏓 Pong! Bot is alive.");
+  bot.sendMessage(msg.chat.id, "Pong! Bot is alive.");
 });
 
 /* ===============================
@@ -87,5 +87,5 @@ app.post(webhookPath, (req, res) => {
    START SERVER
 =============================== */
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
