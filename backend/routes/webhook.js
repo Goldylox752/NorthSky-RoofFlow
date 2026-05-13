@@ -52,6 +52,8 @@ router.post(
       const name = session.metadata?.name || "Unknown";
       const plan = session.metadata?.plan || "starter";
 
+      const sessionId = session.id;
+
       if (!email) {
         console.error("Missing email in session");
         return res.status(400).json({
@@ -63,7 +65,21 @@ router.post(
       const cleanEmail = email.toLowerCase().trim();
 
       /* ===============================
-         UPSERT USER (REAL SAAS MODEL)
+         IDENTITY SAFETY (IDEMPOTENCY CHECK)
+      =============================== */
+      const { data: existing } = await supabase
+        .from("users")
+        .select("id, stripe_session_id")
+        .eq("email", cleanEmail)
+        .maybeSingle();
+
+      if (existing?.stripe_session_id === sessionId) {
+        console.log("Duplicate webhook ignored:", cleanEmail);
+        return res.json({ received: true });
+      }
+
+      /* ===============================
+         UPSERT USER (SAAS MODEL)
       =============================== */
       const { error } = await supabase
         .from("users")
@@ -76,7 +92,7 @@ router.post(
               status: "active",
 
               stripe_customer_id: session.customer,
-              stripe_session_id: session.id,
+              stripe_session_id: sessionId,
 
               activated_at: new Date().toISOString(),
             },
@@ -97,6 +113,9 @@ router.post(
       console.log("User activated:", cleanEmail);
     }
 
+    /* ===============================
+       ALWAYS ACKNOWLEDGE STRIPE
+    =============================== */
     return res.json({ received: true });
   }
 );
