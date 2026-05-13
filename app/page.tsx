@@ -1,14 +1,27 @@
 // app/page.tsx
 import HomeClient from "@/components/HomeClient";
+import type { Metadata } from "next";
 
-export const metadata = {
-  title: "Launch SaaS faster – Ready‑to‑use starter kit for founders",
-  description: "Launch your SaaS in days, not months. Starter ($9/mo), Growth ($29/mo), Elite ($79/mo). Start building today.",
-  robots: "index, follow",
+export const metadata: Metadata = {
+  title: "Launch your SaaS faster | Production-ready SaaS starter kit",
+  description:
+    "Build and launch your SaaS in days, not months. Includes auth, billing, subscriptions, and scaling architecture. Plans start at $9/month.",
+  robots: {
+    index: true,
+    follow: true,
+  },
   openGraph: {
-    title: "Launch SaaS faster",
-    description: "Get to market quickly with our battle‑tested boilerplate.",
+    title: "Launch your SaaS faster",
+    description:
+      "A production-ready SaaS starter kit with authentication, billing, and scaling built in.",
     type: "website",
+    siteName: "SaaS Starter Kit",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Launch your SaaS faster",
+    description:
+      "Production-ready SaaS boilerplate with auth, billing, and scaling built in.",
   },
 };
 
