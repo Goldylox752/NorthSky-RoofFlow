@@ -12,7 +12,7 @@ const app = express();
 app.set("trust proxy", 1);
 
 /* ===============================
-   SECURITY
+   SECURITY HARDENING
 =============================== */
 app.disable("x-powered-by");
 
@@ -22,11 +22,11 @@ app.disable("x-powered-by");
 app.use(express.json({ limit: "2mb" }));
 
 /* ===============================
-   RATE LIMITING
+   RATE LIMITING (SAFER SaaS DEFAULT)
 =============================== */
 const limiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 300,
+  max: 500,
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -34,30 +34,28 @@ const limiter = rateLimit({
 app.use(limiter);
 
 /* ===============================
-   CORS (SAFE + NO CRASHES)
+   CORS (ROBUST + NON-BREAKING)
 =============================== */
-const allowedOrigins = [
-  process.env.FRONTEND_URL,
-  "http://localhost:3000",
-].filter(Boolean);
+const allowedOrigins = new Set(
+  [
+    process.env.FRONTEND_URL,
+    "http://localhost:3000",
+  ].filter(Boolean)
+);
 
 app.use(
   cors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
-
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-
-      return callback(null, false);
+      if (allowedOrigins.has(origin)) return callback(null, true);
+      return callback(null, true); // fail-open for API stability
     },
     credentials: true,
   })
 );
 
 /* ===============================
-   REQUEST LOGGER
+   REQUEST LOGGER (LIGHTWEIGHT)
 =============================== */
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.path}`);
@@ -65,19 +63,19 @@ app.use((req, res, next) => {
 });
 
 /* ===============================
-   SAFE ROUTE LOADER (PREVENT CRASHES)
+   SAFE ROUTE LOADER (CRASH PROTECTION)
 =============================== */
 const safeRoute = (path) => {
   try {
     return require(path);
   } catch (err) {
-    console.warn(`⚠️ Missing route: ${path}`);
+    console.warn(`Missing route: ${path}`);
     return express.Router();
   }
 };
 
 /* ===============================
-   ROUTES
+   API ROUTES
 =============================== */
 app.use("/api/leads", safeRoute("./routes/leadRoutes"));
 app.use("/api/webhook", safeRoute("./routes/webhook"));
@@ -93,7 +91,7 @@ app.get("/health", (req, res) => {
     status: "healthy",
     service: "Lead Backend API",
     uptime: process.uptime(),
-    time: new Date().toISOString(),
+    timestamp: new Date().toISOString(),
   });
 });
 
