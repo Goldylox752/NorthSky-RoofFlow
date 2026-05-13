@@ -26,12 +26,13 @@ app.use(express.json());
 const bot = new TelegramBot(token);
 
 /* ===============================
-   WEBHOOK PATH
+   SECURE WEBHOOK PATH (FIXED)
+   - NO TOKEN IN URL
 =============================== */
-const webhookPath = `/bot${token}`;
+const webhookPath = "/telegram-webhook";
 
 /* ===============================
-   SET COMMANDS (TELEGRAM UI MENU)
+   SET TELEGRAM COMMANDS
 =============================== */
 bot.setMyCommands([
   { command: "start", description: "Start bot" },
@@ -42,25 +43,21 @@ bot.setMyCommands([
 /* ===============================
    SET WEBHOOK
 =============================== */
-bot.setWebHook(`${webhookUrl}${webhookPath}`);
+const fullWebhookUrl = `${webhookUrl}${webhookPath}`;
 
-console.log("Webhook set to:", `${webhookUrl}${webhookPath}`);
+bot.setWebHook(fullWebhookUrl);
+
+console.log("Webhook set to:", fullWebhookUrl);
 
 /* ===============================
    COMMAND HANDLERS
 =============================== */
 bot.onText(/\/start/, (msg) => {
-  bot.sendMessage(
-    msg.chat.id,
-    "Webhook Bot Online (Production Mode)"
-  );
+  bot.sendMessage(msg.chat.id, "Webhook Bot Online (Production Mode)");
 });
 
 bot.onText(/\/help/, (msg) => {
-  bot.sendMessage(
-    msg.chat.id,
-    "Commands:\n/start\n/help\n/ping"
-  );
+  bot.sendMessage(msg.chat.id, "Commands:\n/start\n/help\n/ping");
 });
 
 bot.onText(/\/ping/, (msg) => {
@@ -76,11 +73,16 @@ bot.on("message", (msg) => {
 });
 
 /* ===============================
-   TELEGRAM WEBHOOK ENDPOINT
+   WEBHOOK ENDPOINT
 =============================== */
 app.post(webhookPath, (req, res) => {
-  bot.processUpdate(req.body);
-  res.sendStatus(200);
+  try {
+    bot.processUpdate(req.body);
+    res.sendStatus(200);
+  } catch (err) {
+    console.error("Webhook error:", err);
+    res.sendStatus(500);
+  }
 });
 
 /* ===============================
