@@ -1,4 +1,5 @@
-const router = require("express").Router();
+const express = require("express");
+const router = express.Router();
 const crypto = require("crypto");
 
 const supabase = require("../lib/supabase");
@@ -9,43 +10,39 @@ const { calculateScore, getTier } = require("../utils/scoring");
 const { calculatePrice } = require("../services/pricingEngine");
 
 /* ===============================
-   ENV VALIDATION
+   ENV CHECK
 =============================== */
 
 if (!process.env.CLIENT_URL) {
-  throw new Error("Missing CLIENT_URL environment variable");
+  throw new Error("Missing CLIENT_URL");
 }
 
 const TG_TOKEN = process.env.TG_TOKEN;
 const TG_CHAT_ID = process.env.TG_CHAT_ID;
 
 /* ===============================
-   TELEGRAM SERVICE (UPGRADED)
+   TELEGRAM (NON-BLOCKING)
 =============================== */
 
 const sendTelegram = async (message) => {
-  try {
-    if (!TG_TOKEN || !TG_CHAT_ID) return;
+  if (!TG_TOKEN || !TG_CHAT_ID) return;
 
-    await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: TG_CHAT_ID,
-        text: message,
-        parse_mode: "Markdown",
-      }),
-    });
-  } catch (err) {
-    console.error("Telegram error:", err);
-  }
+  fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: TG_CHAT_ID,
+      text: message,
+      parse_mode: "Markdown",
+    }),
+  }).catch(() => {});
 };
 
 /* ===============================
    HELPERS
 =============================== */
 
-const clean = (v) => (typeof v === "string" ? v.trim() || null : null);
+const clean = (v) => (typeof v === "string" ? v.trim() : null);
 
 const normalizeEmail = (email) =>
   clean(email)?.toLowerCase() || null;
@@ -54,15 +51,10 @@ const sanitizeUTM = (v) =>
   clean(v)?.slice(0, 120) || null;
 
 /* ===============================
-   STRIPE CHECKOUT
+   STRIPE SESSION
 =============================== */
 
-const createCheckoutSession = async ({
-  lead,
-  tier,
-  score,
-  price,
-}) => {
+const createCheckoutSession = async ({ lead, tier, score, price }) => {
   return stripe.checkout.sessions.create({
     mode: "payment",
     payment_method_types: ["card"],
@@ -85,9 +77,9 @@ const createCheckoutSession = async ({
 
     metadata: {
       leadId: lead.id,
-      tier,
+      tier: String(tier),
       score: String(score),
-      email: lead.email || "",
+      email: String(lead.email || ""),
     },
 
     success_url: `${process.env.CLIENT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
@@ -133,12 +125,12 @@ router.post("/", async (req, res) => {
       });
     }
 
-    /* ---------- idempotency ---------- */
+    /* ---------- idempotency key ---------- */
     const idempotencyKey = buildKey(email, phone, city);
 
     const { data: existing } = await supabase
       .from("leads")
-      .select("*")
+      .select("id")
       .eq("idempotency_key", idempotencyKey)
       .maybeSingle();
 
@@ -154,6 +146,12 @@ router.post("/", async (req, res) => {
     const score = calculateScore({ email, phone, city });
     const tier = getTier(score);
     const price = calculatePrice(score, city);
+
+    /* ---------- IP SAFE ---------- */
+    const ip =
+      (req.headers["x-forwarded-for"] || "")
+        .split(",")[0]
+        .trim() || req.ip;
 
     /* ---------- create lead ---------- */
     const leadId = crypto.randomUUID();
@@ -178,24 +176,27 @@ router.post("/", async (req, res) => {
       utm_medium,
 
       source: req.headers.origin || "direct",
-
-      ip_address: req.headers["x-forwarded-for"] || req.ip,
+      ip_address: ip,
       user_agent: req.headers["user-agent"],
 
       created_at: new Date().toISOString(),
     };
 
-    const { data: lead } = await supabase
+    const { data: lead, error: insertError } = await supabase
       .from("leads")
       .insert([leadPayload])
       .select()
       .single();
 
-    /* ===============================
-       🔥 TELEGRAM: NEW LEAD ALERT
-    =============================== */
+    if (insertError) {
+      return res.status(500).json({
+        success: false,
+        error: "lead_insert_failed",
+      });
+    }
 
-    await sendTelegram(
+    /* ---------- TELEGRAM (ASYNC) ---------- */
+    sendTelegram(
       `🚀 *NEW LEAD*\n\n` +
       `👤 ${lead.name || "N/A"}\n` +
       `📧 ${lead.email || "N/A"}\n` +
@@ -205,7 +206,7 @@ router.post("/", async (req, res) => {
       `💵 Price: $${price}`
     );
 
-    /* ---------- stripe ---------- */
+    /* ---------- STRIPE ---------- */
     const session = await createCheckoutSession({
       lead,
       tier,
@@ -213,17 +214,17 @@ router.post("/", async (req, res) => {
       price,
     });
 
-    await supabase
+    const { error: updateError } = await supabase
       .from("leads")
       .update({ stripe_session_id: session.id })
       .eq("id", lead.id);
 
-    /* ===============================
-       🔥 TELEGRAM: CHECKOUT CREATED
-    =============================== */
+    if (updateError) {
+      throw updateError;
+    }
 
-    await sendTelegram(
-      `💳 *CHECKOUT READY*\n\n` +
+    sendTelegram(
+      `💳 *CHECKOUT CREATED*\n\n` +
       `Lead: ${lead.id}\n` +
       `Tier: ${tier}\n` +
       `Amount: $${price}`
@@ -248,14 +249,13 @@ router.post("/", async (req, res) => {
   } catch (err) {
     console.error("LEAD ERROR:", err);
 
-    await sendTelegram(
-      `❌ *SYSTEM ERROR*\n\n` +
-      `${err?.message || "Unknown error"}`
+    sendTelegram(
+      `❌ *SYSTEM ERROR*\n\n${err.message || "Unknown error"}`
     );
 
     return res.status(500).json({
       success: false,
-      error: "Internal server error",
+      error: "internal_error",
     });
   }
 });
