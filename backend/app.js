@@ -9,12 +9,12 @@ const logger = require("./lib/logger");
 const app = express();
 
 /* ===============================
-   TRUST PROXY
+   TRUST PROXY (Render / VPS / Cloud)
 =============================== */
 app.set("trust proxy", 1);
 
 /* ===============================
-   SECURITY
+   SECURITY HARDENING
 =============================== */
 app.disable("x-powered-by");
 
@@ -24,7 +24,7 @@ app.disable("x-powered-by");
 app.use(express.json({ limit: "2mb" }));
 
 /* ===============================
-   REQUEST ID
+   REQUEST ID + CONTEXT
 =============================== */
 app.use((req, res, next) => {
   req.id = crypto.randomUUID();
@@ -33,44 +33,23 @@ app.use((req, res, next) => {
 });
 
 /* ===============================
-   RESPONSE TIMER (SAAS DEBUGGING POWER)
+   RATE LIMITING (PRODUCTION SAFE)
 =============================== */
-app.use((req, res, next) => {
-  const start = Date.now();
-
-  res.on("finish", () => {
-    const duration = Date.now() - start;
-
-    logger.info({
-      requestId: req.id,
-      method: req.method,
-      path: req.path,
-      status: res.statusCode,
-      duration,
-    }, "Request completed");
-  });
-
-  next();
+const limiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 500,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: "Too many requests",
+  },
 });
 
-/* ===============================
-   RATE LIMITING
-=============================== */
-app.use(
-  rateLimit({
-    windowMs: 60 * 1000,
-    max: 500,
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: {
-      success: false,
-      error: "Too many requests",
-    },
-  })
-);
+app.use(limiter);
 
 /* ===============================
-   CORS (SAFE + NO FULL API BREAK)
+   CORS (STRICT SaaS MODE)
 =============================== */
 const allowedOrigins = new Set(
   [process.env.FRONTEND_URL, "http://localhost:3000"].filter(Boolean)
@@ -79,15 +58,14 @@ const allowedOrigins = new Set(
 app.use(
   cors({
     origin: (origin, callback) => {
-      try {
-        if (!origin) return callback(null, true);
-        if (allowedOrigins.has(origin)) return callback(null, true);
+      if (!origin) return callback(null, true);
 
-        return callback(null, false); // SAFE FAIL (no crash)
-      } catch (err) {
-        logger.error(err, "CORS error");
+      if (allowedOrigins.has(origin)) {
         return callback(null, true);
       }
+
+      logger.warn({ origin }, "Blocked CORS request");
+      return callback(new Error("CORS blocked"), false);
     },
     credentials: true,
   })
@@ -110,7 +88,32 @@ app.use((req, res, next) => {
 });
 
 /* ===============================
-   SAFE ROUTES
+   RESPONSE TIMER (SAAS OBSERVABILITY)
+=============================== */
+app.use((req, res, next) => {
+  const start = process.hrtime();
+
+  res.on("finish", () => {
+    const diff = process.hrtime(start);
+    const durationMs = diff[0] * 1000 + diff[1] / 1e6;
+
+    logger.info(
+      {
+        requestId: req.id,
+        method: req.method,
+        path: req.path,
+        status: res.statusCode,
+        durationMs: Math.round(durationMs),
+      },
+      "Request completed"
+    );
+  });
+
+  next();
+});
+
+/* ===============================
+   SAFE ROUTER LOADER
 =============================== */
 const safeRoute = (path) => {
   try {
@@ -121,21 +124,23 @@ const safeRoute = (path) => {
   }
 };
 
+/* ===============================
+   ROUTES
+=============================== */
 app.use("/api/leads", safeRoute("./routes/leadRoutes"));
 app.use("/api/webhook", safeRoute("./routes/webhook"));
 app.use("/api/payments", safeRoute("./routes/payments"));
 app.use("/api/telegram", safeRoute("./routes/telegramWebhook"));
 
 /* ===============================
-   HEALTH
+   HEALTH CHECK
 =============================== */
 app.get("/health", (req, res) => {
-  logger.info({ requestId: req.id }, "Health check");
-
   res.status(200).json({
     success: true,
     status: "healthy",
     uptime: process.uptime(),
+    requestId: req.id,
   });
 });
 
@@ -150,7 +155,7 @@ app.get("/", (req, res) => {
 });
 
 /* ===============================
-   404
+   404 HANDLER
 =============================== */
 app.use((req, res) => {
   logger.warn(
@@ -175,7 +180,7 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
   logger.error(
     {
-      error: err.message,
+      message: err.message,
       stack: err.stack,
       requestId: req.id,
     },
