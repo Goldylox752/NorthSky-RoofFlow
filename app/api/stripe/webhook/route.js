@@ -3,6 +3,7 @@ const router = express.Router();
 const Stripe = require("stripe");
 const { createClient } = require("@supabase/supabase-js");
 const https = require("https");
+const logger = require("../lib/logger"); // IMPORTANT ADD
 
 /* ===============================
    ENV SAFETY
@@ -23,7 +24,7 @@ const supabase = createClient(
 );
 
 /* ===============================
-   SAFE TELEGRAM (NODE 14 SAFE)
+   TELEGRAM (SAFE FALLBACK)
 =============================== */
 const sendTelegram = (text) => {
   const token = process.env.TG_TOKEN;
@@ -36,56 +37,73 @@ const sendTelegram = (text) => {
     parse_mode: "Markdown",
   });
 
-  const options = {
-    hostname: "api.telegram.org",
-    path: `/bot${token}/sendMessage`,
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Content-Length": Buffer.byteLength(payload),
+  const req = https.request(
+    {
+      hostname: "api.telegram.org",
+      path: `/bot${token}/sendMessage`,
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
     },
-  };
+    () => {}
+  );
 
-  const req = https.request(options);
   req.on("error", () => {});
   req.write(payload);
   req.end();
 };
 
 /* ===============================
-   IDEMPOTENCY CHECK (SAFE)
+   IDEMPOTENCY CHECK
 =============================== */
 async function isProcessed(eventId) {
-  const { data } = await supabase
-    .from("stripe_events")
-    .select("id")
-    .eq("id", eventId)
-    .maybeSingle();
+  try {
+    const { data } = await supabase
+      .from("stripe_events")
+      .select("id")
+      .eq("id", eventId)
+      .maybeSingle();
 
-  return !!data;
+    return !!data;
+  } catch (err) {
+    logger.errorLog(err, { eventId });
+    return false; // fail open for Stripe retries
+  }
 }
 
 async function markEvent(eventId, payload) {
-  await supabase.from("stripe_events").upsert({
-    id: eventId,
-    ...payload,
-    updated_at: new Date().toISOString(),
-  });
+  try {
+    await supabase.from("stripe_events").upsert({
+      id: eventId,
+      ...payload,
+      updated_at: new Date().toISOString(),
+    });
+  } catch (err) {
+    logger.errorLog(err, { eventId });
+  }
 }
 
 /* ===============================
-   CHECKOUT HANDLER (HARDENED)
+   CHECKOUT HANDLER
 =============================== */
 async function handleCheckout(session) {
   const leadId = session.metadata?.leadId;
   const plan = session.metadata?.plan;
 
-  if (!leadId || !plan) throw new Error("Missing metadata");
+  if (!leadId || !plan) {
+    throw new Error("Missing Stripe metadata (leadId, plan)");
+  }
+
+  logger.stripe("checkout.session.completed", {
+    leadId,
+    plan,
+  });
 
   const update = {
     paid: true,
     status: "active",
-    plan: plan.toLowerCase(),
+    plan: (plan || "starter").toLowerCase(),
     stripe_customer_id: session.customer || null,
     customer_email: session.customer_details?.email || null,
     updated_at: new Date().toISOString(),
@@ -111,7 +129,7 @@ async function handleCheckout(session) {
 }
 
 /* ===============================
-   SUBSCRIPTION SYNC (ROBUST PLAN RESOLUTION)
+   SUBSCRIPTION SYNC
 =============================== */
 async function syncSubscription(sub) {
   const customerId = sub.customer;
@@ -123,10 +141,16 @@ async function syncSubscription(sub) {
 
   const status = mapStatus(sub.status);
 
+  logger.stripe("subscription.updated", {
+    customerId,
+    plan,
+    status,
+  });
+
   await supabase
     .from("users")
     .update({
-      plan: plan.toLowerCase(),
+      plan: (plan || "starter").toLowerCase(),
       status,
       updated_at: new Date().toISOString(),
     })
@@ -137,6 +161,10 @@ async function syncSubscription(sub) {
    PAYMENT FAILED
 =============================== */
 async function handlePaymentFailed(invoice) {
+  logger.stripe("payment.failed", {
+    customer: invoice.customer,
+  });
+
   await supabase
     .from("users")
     .update({
@@ -152,6 +180,10 @@ async function handlePaymentFailed(invoice) {
    CANCEL
 =============================== */
 async function handleCancel(sub) {
+  logger.stripe("subscription.canceled", {
+    customer: sub.customer,
+  });
+
   await supabase
     .from("users")
     .update({
@@ -165,26 +197,39 @@ async function handleCancel(sub) {
 }
 
 /* ===============================
-   EVENT PROCESSOR
+   PROCESSOR (SAFE WRAPPER)
 =============================== */
 async function processEvent(event) {
-  if (event.type === "checkout.session.completed") {
-    return handleCheckout(event.data.object);
-  }
+  try {
+    logger.info(
+      { type: event.type, id: event.id },
+      "processing_stripe_event"
+    );
 
-  if (
-    event.type === "customer.subscription.created" ||
-    event.type === "customer.subscription.updated"
-  ) {
-    return syncSubscription(event.data.object);
-  }
+    switch (event.type) {
+      case "checkout.session.completed":
+        return await handleCheckout(event.data.object);
 
-  if (event.type === "invoice.payment_failed") {
-    return handlePaymentFailed(event.data.object);
-  }
+      case "customer.subscription.created":
+      case "customer.subscription.updated":
+        return await syncSubscription(event.data.object);
 
-  if (event.type === "customer.subscription.deleted") {
-    return handleCancel(event.data.object);
+      case "invoice.payment_failed":
+        return await handlePaymentFailed(event.data.object);
+
+      case "customer.subscription.deleted":
+        return await handleCancel(event.data.object);
+
+      default:
+        logger.warn({ type: event.type }, "unhandled_event");
+    }
+  } catch (err) {
+    logger.errorLog(err, {
+      eventType: event.type,
+      eventId: event.id,
+    });
+
+    throw err;
   }
 }
 
@@ -199,7 +244,9 @@ router.post(
 
     try {
       const signature = req.headers["stripe-signature"];
-      if (!signature) return res.status(400).send("Missing signature");
+      if (!signature) {
+        return res.status(400).send("Missing signature");
+      }
 
       event = stripe.webhooks.constructEvent(
         req.body,
@@ -225,7 +272,10 @@ router.post(
 
       return res.json({ received: true });
     } catch (err) {
-      console.error("Webhook error:", err.message);
+      logger.errorLog(err, {
+        stage: "stripe_webhook",
+        eventId: event?.id,
+      });
 
       if (event?.id) {
         await markEvent(event.id, {
