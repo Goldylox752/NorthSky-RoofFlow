@@ -2,36 +2,30 @@ require("dotenv").config();
 const app = require("./app");
 
 /* ===============================
-   ENV VALIDATION
+   ENV SETUP
 =============================== */
+
 const PORT = process.env.PORT || 3000;
 
-if (!process.env.NODE_ENV) {
-  process.env.NODE_ENV = "development";
-}
+process.env.NODE_ENV ||= "development";
 
 const isProd = process.env.NODE_ENV === "production";
 
 /* ===============================
    START SERVER
 =============================== */
+
 const server = app.listen(PORT, () => {
   console.log(
-    `🚀 Server running in ${process.env.NODE_ENV} mode on port ${PORT}`
+    `Server running in ${process.env.NODE_ENV} mode on port ${PORT}`
   );
 });
 
 /* ===============================
-   PRODUCTION HARDENING
+   CONNECTION TRACKING
 =============================== */
-server.keepAliveTimeout = 65_000;
-server.headersTimeout = 66_000;
 
-/* ===============================
-   TRACK ACTIVE CONNECTIONS
-   (important for graceful shutdown)
-=============================== */
-let connections = new Set();
+const connections = new Set();
 
 server.on("connection", (conn) => {
   connections.add(conn);
@@ -42,42 +36,55 @@ server.on("connection", (conn) => {
 });
 
 /* ===============================
-   CRASH SAFETY
+   SERVER HARDENING
 =============================== */
-process.on("uncaughtException", (err) => {
-  console.error("💥 Uncaught Exception:", err);
 
-  // In production, you usually restart process via PM2/Docker
+server.keepAliveTimeout = 65_000;
+server.headersTimeout = 66_000;
+
+/* ===============================
+   ERROR HANDLING
+=============================== */
+
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught Exception:", err);
+
   if (isProd) process.exit(1);
 });
 
 process.on("unhandledRejection", (err) => {
-  console.error("⚠️ Unhandled Rejection:", err);
+  console.error("Unhandled Rejection:", err);
 
   if (isProd) process.exit(1);
 });
 
 /* ===============================
-   GRACEFUL SHUTDOWN (CLEAN)
+   GRACEFUL SHUTDOWN
 =============================== */
-const shutdown = (signal) => {
-  console.log(`🔻 ${signal} received. Shutting down gracefully...`);
+
+function shutdown(signal) {
+  console.log(`${signal} received. Shutting down gracefully...`);
 
   server.close(() => {
-    console.log("✅ HTTP server closed");
-
+    console.log("HTTP server closed");
     process.exit(0);
   });
 
-  // Force close after timeout (prevents hanging deploys)
+  // force exit if hanging
   setTimeout(() => {
-    console.warn("⚠️ Force shutdown after timeout");
+    console.error("Forced shutdown due to timeout");
     process.exit(1);
   }, 10000).unref();
 
-  // Destroy open connections
-  connections.forEach((conn) => conn.destroy());
-};
+  // close all open connections
+  for (const conn of connections) {
+    conn.destroy();
+  }
+}
+
+/* ===============================
+   SIGNAL HANDLERS
+=============================== */
 
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
