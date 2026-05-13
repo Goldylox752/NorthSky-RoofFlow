@@ -22,16 +22,24 @@ export default function Home() {
   const [waitlistState, handleWaitlistSubmit] = useForm(FORM_ID);
   const [contactState, handleContactSubmit] = useForm(FORM_ID);
 
+  const isLoading = !!loadingPlan;
+
+  /* ===============================
+     EVENT TRACKING
+  =============================== */
   const trackEvent = async (event: string, data?: any) => {
     try {
       await fetch(`https://formspree.io/f/${FORM_ID}`, {
         method: "POST",
-        body: JSON.stringify({ event, data }),
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ event, data }),
       });
     } catch {}
   };
 
+  /* ===============================
+     STRIPE CHECKOUT
+  =============================== */
   const checkout = async (planId: string) => {
     if (loadingPlan) return;
 
@@ -41,24 +49,21 @@ export default function Home() {
     try {
       await trackEvent("checkout_click", { planId });
 
-      /* ===============================
-         CALL YOUR REAL BACKEND
-      =============================== */
-      const res = await api("/api/payments/checkout", {
+      const res = await api("/create-checkout-session", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           plan: planId,
         }),
       });
 
-      const url = res?.url;
-
-      if (!url) {
-        throw new Error("No checkout URL returned");
+      if (!res?.url) {
+        throw new Error("Missing checkout URL from server");
       }
 
-      window.location.href = url;
+      window.location.href = res.url;
     } catch (err: any) {
       setError(err?.message || "Checkout failed");
     } finally {
@@ -74,9 +79,17 @@ export default function Home() {
     await handleContactSubmit(e);
   };
 
+  /* ===============================
+     EXIT INTENT POPUP (FIXED)
+  =============================== */
   useEffect(() => {
+    let shown = false;
+
     const handler = (e: MouseEvent) => {
-      if (e.clientY <= 5) setShowPopup(true);
+      if (!shown && e.clientY <= 5) {
+        setShowPopup(true);
+        shown = true;
+      }
     };
 
     window.addEventListener("mouseout", handler);
@@ -93,7 +106,7 @@ export default function Home() {
         <button
           style={styles.primaryBtn}
           onClick={() => checkout("starter")}
-          disabled={loadingPlan === "starter"}
+          disabled={isLoading}
         >
           {loadingPlan === "starter" ? "Loading..." : "Start Building"}
         </button>
@@ -104,7 +117,7 @@ export default function Home() {
         <h2>Join Waitlist</h2>
 
         {waitlistState.succeeded ? (
-          <p>You're in 🚀</p>
+          <p>You’re in</p>
         ) : (
           <form onSubmit={handleWaitlist} style={styles.form}>
             <input name="email" placeholder="Email" style={styles.input} />
@@ -125,7 +138,7 @@ export default function Home() {
             <button
               onClick={() => checkout(p.id)}
               style={styles.btn}
-              disabled={loadingPlan === p.id}
+              disabled={isLoading}
             >
               {loadingPlan === p.id ? "Processing..." : p.cta}
             </button>
@@ -158,8 +171,10 @@ export default function Home() {
         </div>
       )}
 
+      {/* ERROR */}
       {error && <p style={{ color: "red" }}>{error}</p>}
 
+      {/* FOOTER */}
       <footer>© {year}</footer>
     </main>
   );
