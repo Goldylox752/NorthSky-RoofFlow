@@ -8,7 +8,7 @@ const PORT = Number(process.env.PORT || 3001);
    BASIC SAFETY CHECKS
 =============================== */
 if (!process.env.PORT) {
-  console.warn("⚠️ PORT not set — using fallback 3001");
+  console.warn("PORT not set — using fallback 3001");
 }
 
 /* ===============================
@@ -19,18 +19,16 @@ let server;
 const startServer = () => {
   try {
     server = app.listen(PORT, () => {
-      console.log(`
-🚀 Server Running
-📡 Port: ${PORT}
-❤️ Health: /health
-      `);
+      console.log("Server running");
+      console.log("Port:", PORT);
+      console.log("Health: /health");
     });
 
-    // Render / cloud stability tuning
+    // Stability tuning for proxies / hosting
     server.keepAliveTimeout = 65000;
     server.headersTimeout = 66000;
   } catch (err) {
-    console.error("❌ Server failed to start:", err);
+    console.error("Server failed to start:", err);
     process.exit(1);
   }
 };
@@ -46,22 +44,24 @@ const shutdown = (signal, err = null) => {
   if (shuttingDown) return;
   shuttingDown = true;
 
-  console.log(`\n🛑 Shutdown: ${signal}`);
+  console.log("Shutdown triggered:", signal);
 
-  if (err) console.error(err);
+  if (err) {
+    console.error(err);
+  }
 
   if (!server) {
     process.exit(1);
+    return;
   }
 
   server.close(() => {
-    console.log("✅ Server closed cleanly");
+    console.log("Server closed cleanly");
     process.exit(0);
   });
 
-  // force exit fallback
   setTimeout(() => {
-    console.error("⚠️ Forced shutdown timeout");
+    console.error("Forced shutdown timeout");
     process.exit(1);
   }, 10000).unref();
 };
@@ -70,12 +70,12 @@ const shutdown = (signal, err = null) => {
    ERROR HANDLERS
 =============================== */
 process.on("uncaughtException", (err) => {
-  console.error("🔥 Uncaught Exception");
+  console.error("Uncaught Exception");
   shutdown("uncaughtException", err);
 });
 
 process.on("unhandledRejection", (err) => {
-  console.error("🔥 Unhandled Rejection");
+  console.error("Unhandled Rejection");
   shutdown("unhandledRejection", err);
 });
 
