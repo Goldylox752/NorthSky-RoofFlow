@@ -17,14 +17,16 @@ const {
   PORT = 3000,
 } = process.env;
 
-if (
-  !TELEGRAM_BOT_TOKEN ||
-  !WEBHOOK_URL ||
-  !STRIPE_SECRET_KEY ||
-  !STRIPE_PRICE_ID ||
-  !CLIENT_URL
-) {
-  throw new Error("Missing required environment variables");
+const required = {
+  TELEGRAM_BOT_TOKEN,
+  WEBHOOK_URL,
+  STRIPE_SECRET_KEY,
+  STRIPE_PRICE_ID,
+  CLIENT_URL,
+};
+
+for (const [key, value] of Object.entries(required)) {
+  if (!value) throw new Error(`Missing env: ${key}`);
 }
 
 /* ===============================
@@ -47,7 +49,7 @@ app.use("/stripe-webhook", express.raw({ type: "application/json" }));
 app.use(express.json({ limit: "1mb" }));
 
 /* ===============================
-   MEMORY STORE (replace later with Supabase)
+   MEMORY STORE (swap with DB later)
 =============================== */
 const users = new Map();
 const timers = new Map();
@@ -82,13 +84,14 @@ const isPro = (u) => u.plan === "pro";
    HELPERS
 =============================== */
 const setState = (id, value) => state.set(id, value);
+
 const clearTimer = (id) => {
   const t = timers.get(id);
   if (t) clearTimeout(t);
 };
 
 /* ===============================
-   SALES MESSAGE (CORE CONVERTER)
+   SALES MESSAGE (HIGH CONVERSION)
 =============================== */
 function salesMessage(user) {
   return `
@@ -96,7 +99,7 @@ function salesMessage(user) {
 
 Hi @${user.username}
 
-You’re on the FREE plan.
+You are currently on the FREE plan.
 
 ━━━━━━━━━━━━━━
 FREE:
@@ -115,15 +118,15 @@ UNLOCK:
 
 ━━━━━━━━━━━━━━
 WHY PRO:
-PRO users get results before everyone else.
+PRO users consistently move faster and get better outcomes.
 
-👉 Upgrade:
+👉 Upgrade here:
 ${CLIENT_URL}/checkout?plan=pro
 `;
 }
 
 /* ===============================
-   TELEGRAM COMMANDS
+   TELEGRAM MENU
 =============================== */
 bot.setMyCommands([
   { command: "start", description: "Start bot" },
@@ -133,7 +136,7 @@ bot.setMyCommands([
 ]);
 
 /* ===============================
-   START + FUNNEL + FOLLOW UPS
+   START FLOW + FOLLOW UPS
 =============================== */
 bot.onText(/\/start/, (msg) => {
   const user = getUser(msg.from);
@@ -145,26 +148,30 @@ bot.onText(/\/start/, (msg) => {
   clearTimer(user.id);
 
   /* FOLLOW UP #1 (30s) */
-  const t1 = setTimeout(() => {
-    if (!isPro(user)) {
-      bot.sendMessage(
-        user.id,
-        "Quick question 👀\n\nWant to see why PRO users get better results?"
-      );
-    }
-  }, 30000);
+  timers.set(
+    user.id,
+    setTimeout(() => {
+      if (!isPro(user)) {
+        bot.sendMessage(
+          user.id,
+          "Quick question 👀\n\nWant to see why PRO users get better results?"
+        );
+      }
+    }, 30000)
+  );
 
   /* FOLLOW UP #2 (3 min) */
-  const t2 = setTimeout(() => {
-    if (!isPro(user)) {
-      bot.sendMessage(
-        user.id,
-        `Still thinking?\n\nMost users upgrade to avoid missing opportunities.\n\n👉 ${CLIENT_URL}/checkout?plan=pro`
-      );
-    }
-  }, 180000);
-
-  timers.set(user.id, t2);
+  timers.set(
+    user.id,
+    setTimeout(() => {
+      if (!isPro(user)) {
+        bot.sendMessage(
+          user.id,
+          `Still thinking?\n\nMost users upgrade to avoid missing opportunities.\n\n👉 ${CLIENT_URL}/checkout?plan=pro`
+        );
+      }
+    }, 180000)
+  );
 });
 
 /* ===============================
@@ -217,12 +224,7 @@ bot.onText(/\/upgrade/, async (msg) => {
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       payment_method_types: ["card"],
-      line_items: [
-        {
-          price: STRIPE_PRICE_ID,
-          quantity: 1,
-        },
-      ],
+      line_items: [{ price: STRIPE_PRICE_ID, quantity: 1 }],
 
       success_url: `${CLIENT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${CLIENT_URL}/cancel`,
@@ -234,24 +236,22 @@ bot.onText(/\/upgrade/, async (msg) => {
 
     user.stripeSessionId = session.id;
 
-    bot.sendMessage(
-      msg.chat.id,
-      `💳 Complete payment:\n\n${session.url}`
-    );
+    bot.sendMessage(msg.chat.id, `💳 Complete payment:\n\n${session.url}`);
 
     clearTimer(user.id);
 
     /* ABANDONMENT FOLLOW-UP (10 min) */
-    const t3 = setTimeout(() => {
-      if (!isPro(user)) {
-        bot.sendMessage(
-          user.id,
-          `Your PRO access is still waiting.\n\n👉 ${session.url}`
-        );
-      }
-    }, 600000);
-
-    timers.set(user.id, t3);
+    timers.set(
+      user.id,
+      setTimeout(() => {
+        if (!isPro(user)) {
+          bot.sendMessage(
+            user.id,
+            `Your PRO access is still waiting.\n\n👉 ${session.url}`
+          );
+        }
+      }, 600000)
+    );
 
   } catch (err) {
     console.error("Stripe error:", err);
@@ -319,7 +319,7 @@ app.get("/health", (req, res) => {
   res.json({
     status: "ok",
     users: all.length,
-    proUsers: all.filter((u) => u.plan === "pro").length,
+    proUsers: all.filter(u => u.plan === "pro").length,
   });
 });
 
