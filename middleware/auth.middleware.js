@@ -20,15 +20,21 @@ const FEATURES = {
 };
 
 /* ===============================
-   SAFE PLAN RESOLUTION
+   SAFE PLAN NORMALIZATION
 =============================== */
 const normalizePlan = (plan) => {
   if (!plan || typeof plan !== "string") return "starter";
-  return plan.toLowerCase().trim();
+
+  const cleaned = plan.toLowerCase().trim();
+
+  // prevent invalid DB values from breaking SaaS
+  if (!FEATURES[cleaned]) return "starter";
+
+  return cleaned;
 };
 
 /* ===============================
-   PLAN PRIORITY (UPGRADE LOGIC)
+   PLAN LEVEL SYSTEM
 =============================== */
 const PLAN_LEVEL = {
   starter: 1,
@@ -40,20 +46,22 @@ const PLAN_LEVEL = {
    GET PLAN FEATURES
 =============================== */
 const getPlan = (plan) => {
-  const normalized = normalizePlan(plan);
-  return FEATURES[normalized] || FEATURES.starter;
+  return FEATURES[normalizePlan(plan)];
 };
 
 /* ===============================
-   FEATURE CHECK
+   FEATURE CHECK (CORE SAFETY)
 =============================== */
 const hasFeature = (plan, feature) => {
-  const features = getPlan(plan);
-  return Boolean(features?.[feature]);
+  const normalized = normalizePlan(plan);
+  const features = FEATURES[normalized];
+
+  if (!features) return false;
+  return features[feature] === true;
 };
 
 /* ===============================
-   PLAN COMPARISON (IMPORTANT FOR SAAS)
+   PLAN ACCESS CHECK
 =============================== */
 const hasPlanAccess = (userPlan, requiredPlan) => {
   const userLevel = PLAN_LEVEL[normalizePlan(userPlan)] || 0;
@@ -63,7 +71,7 @@ const hasPlanAccess = (userPlan, requiredPlan) => {
 };
 
 /* ===============================
-   FEATURE MIDDLEWARE (PRODUCTION SAFE)
+   FEATURE MIDDLEWARE
 =============================== */
 const requireFeature = (feature) => {
   return (req, res, next) => {
@@ -72,9 +80,9 @@ const requireFeature = (feature) => {
     if (!hasFeature(plan, feature)) {
       return res.status(403).json({
         success: false,
-        error: `Feature "${feature}" requires upgrade`,
+        error: "Feature not available on your plan",
+        feature,
         currentPlan: normalizePlan(plan),
-        requiredFeature: feature,
       });
     }
 
@@ -83,7 +91,7 @@ const requireFeature = (feature) => {
 };
 
 /* ===============================
-   PLAN MIDDLEWARE (LEVEL-BASED)
+   PLAN MIDDLEWARE
 =============================== */
 const requirePlan = (requiredPlan) => {
   return (req, res, next) => {
@@ -92,7 +100,7 @@ const requirePlan = (requiredPlan) => {
     if (!hasPlanAccess(userPlan, requiredPlan)) {
       return res.status(403).json({
         success: false,
-        error: "Upgrade required",
+        error: "Plan upgrade required",
         currentPlan: normalizePlan(userPlan),
         requiredPlan: normalizePlan(requiredPlan),
       });
@@ -100,6 +108,14 @@ const requirePlan = (requiredPlan) => {
 
     next();
   };
+};
+
+/* ===============================
+   FEATURE VALIDATION (SAAS SAFETY)
+=============================== */
+const isValidFeature = (feature) => {
+  const starter = FEATURES.starter;
+  return Object.prototype.hasOwnProperty.call(starter, feature);
 };
 
 /* ===============================
@@ -112,4 +128,6 @@ module.exports = {
   requireFeature,
   requirePlan,
   hasPlanAccess,
+  normalizePlan,
+  isValidFeature,
 };
