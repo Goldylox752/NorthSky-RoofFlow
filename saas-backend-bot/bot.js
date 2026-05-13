@@ -18,18 +18,23 @@ if (!token || !webhookUrl) {
 }
 
 /* ===============================
-   EXPRESS APP
+   APP INIT
 =============================== */
 const app = express();
+
+/* IMPORTANT:
+   Stripe webhook needs raw body BEFORE json parser
+*/
+app.use("/stripe-webhook", express.raw({ type: "application/json" }));
 app.use(express.json({ limit: "1mb" }));
 
 /* ===============================
-   BOT (NO POLLING)
+   BOT INIT (NO POLLING)
 =============================== */
 const bot = new TelegramBot(token);
 
 /* ===============================
-   WEBHOOK PATH
+   WEBHOOK CONFIG
 =============================== */
 const webhookPath = "/telegram-webhook";
 const fullWebhookUrl = `${webhookUrl}${webhookPath}`;
@@ -54,14 +59,14 @@ async function initWebhook() {
     await bot.setWebHook(fullWebhookUrl);
     console.log("Webhook set to:", fullWebhookUrl);
   } catch (err) {
-    console.error("Failed to set webhook:", err);
+    console.error("Webhook error:", err);
   }
 }
 
 initWebhook();
 
 /* ===============================
-   SAAS USER STORE (TEMP DB)
+   DATABASE (IN-MEMORY)
 =============================== */
 const users = new Map();
 
@@ -84,15 +89,14 @@ function getOrCreateUser(tgUser) {
 }
 
 /* ===============================
-   UPGRADE SYSTEM (LOCAL FALLBACK)
+   HELPERS
 =============================== */
-function upgradeUser(user) {
-  user.plan = "pro";
-  users.set(user.telegramId, user);
+function isPro(user) {
+  return user.plan === "pro";
 }
 
 /* ===============================
-   START
+   COMMANDS
 =============================== */
 bot.onText(/\/start/, (msg) => {
   const user = getOrCreateUser(msg.from);
@@ -110,9 +114,6 @@ Commands:
   );
 });
 
-/* ===============================
-   PROFILE
-=============================== */
 bot.onText(/\/profile/, (msg) => {
   const user = getOrCreateUser(msg.from);
 
@@ -125,9 +126,6 @@ Plan: ${user.plan}`
   );
 });
 
-/* ===============================
-   PLAN
-=============================== */
 bot.onText(/\/plan/, (msg) => {
   const user = getOrCreateUser(msg.from);
 
@@ -144,12 +142,12 @@ PRO:
 });
 
 /* ===============================
-   UPGRADE (REAL STRIPE)
+   STRIPE CHECKOUT (UPGRADE)
 =============================== */
 bot.onText(/\/upgrade/, async (msg) => {
   const user = getOrCreateUser(msg.from);
 
-  if (user.plan === "pro") {
+  if (isPro(user)) {
     return bot.sendMessage(msg.chat.id, "You are already PRO.");
   }
 
@@ -174,10 +172,10 @@ bot.onText(/\/upgrade/, async (msg) => {
 
     bot.sendMessage(
       msg.chat.id,
-      `Upgrade to PRO here:\n${session.url}`
+      `Upgrade to PRO:\n${session.url}`
     );
   } catch (err) {
-    console.error(err);
+    console.error("Stripe error:", err);
     bot.sendMessage(msg.chat.id, "Payment error occurred.");
   }
 });
@@ -185,19 +183,17 @@ bot.onText(/\/upgrade/, async (msg) => {
 /* ===============================
    STRIPE WEBHOOK (AUTO UPGRADE)
 =============================== */
-app.post("/stripe-webhook", express.raw({ type: "application/json" }), (req, res) => {
-  const sig = req.headers["stripe-signature"];
-
+app.post("/stripe-webhook", (req, res) => {
   let event;
 
   try {
     event = stripe.webhooks.constructEvent(
       req.body,
-      sig,
+      req.headers["stripe-signature"],
       process.env.STRIPE_WEBHOOK_SECRET
     );
   } catch (err) {
-    console.error("Webhook error:", err.message);
+    console.error("Stripe webhook error:", err.message);
     return res.sendStatus(400);
   }
 
@@ -248,14 +244,14 @@ bot.on("message", (msg) => {
 });
 
 /* ===============================
-   WEBHOOK ENDPOINT
+   TELEGRAM WEBHOOK ENDPOINT
 =============================== */
 app.post(webhookPath, (req, res) => {
   try {
     bot.processUpdate(req.body);
     res.sendStatus(200);
   } catch (err) {
-    console.error("Webhook error:", err);
+    console.error("Telegram webhook error:", err);
     res.sendStatus(500);
   }
 });
