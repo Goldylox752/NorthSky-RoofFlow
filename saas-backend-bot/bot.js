@@ -18,7 +18,7 @@ if (!token || !webhookUrl) {
    EXPRESS APP
 =============================== */
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: "1mb" }));
 
 /* ===============================
    BOT (NO POLLING)
@@ -26,54 +26,110 @@ app.use(express.json());
 const bot = new TelegramBot(token);
 
 /* ===============================
-   SECURE WEBHOOK PATH (FIXED)
-   - NO TOKEN IN URL
+   WEBHOOK PATH (SECURE STATIC ROUTE)
 =============================== */
 const webhookPath = "/telegram-webhook";
+const fullWebhookUrl = `${webhookUrl}${webhookPath}`;
 
 /* ===============================
-   SET TELEGRAM COMMANDS
+   TELEGRAM COMMANDS (UI MENU)
 =============================== */
 bot.setMyCommands([
   { command: "start", description: "Start bot" },
   { command: "help", description: "Help menu" },
-  { command: "ping", description: "Check bot status" }
+  { command: "ping", description: "Check bot status" },
+  { command: "profile", description: "View your profile" }
 ]);
 
 /* ===============================
    SET WEBHOOK
 =============================== */
-const fullWebhookUrl = `${webhookUrl}${webhookPath}`;
+async function initWebhook() {
+  try {
+    await bot.setWebHook(fullWebhookUrl);
+    console.log("Webhook set to:", fullWebhookUrl);
+  } catch (err) {
+    console.error("Failed to set webhook:", err);
+  }
+}
 
-bot.setWebHook(fullWebhookUrl);
+initWebhook();
 
-console.log("Webhook set to:", fullWebhookUrl);
+/* ===============================
+   BASIC SAAS USER STORE (TEMP MEMORY)
+   (Replace with MongoDB later)
+=============================== */
+const users = new Map();
+
+function getOrCreateUser(tgUser) {
+  let user = users.get(tgUser.id);
+
+  if (!user) {
+    user = {
+      telegramId: tgUser.id,
+      username: tgUser.username || null,
+      plan: "free",
+      createdAt: new Date()
+    };
+
+    users.set(tgUser.id, user);
+  }
+
+  return user;
+}
 
 /* ===============================
    COMMAND HANDLERS
 =============================== */
 bot.onText(/\/start/, (msg) => {
-  bot.sendMessage(msg.chat.id, "Webhook Bot Online (Production Mode)");
+  const user = getOrCreateUser(msg.from);
+
+  bot.sendMessage(
+    msg.chat.id,
+    `Welcome ${user.username || "user"}
+Plan: ${user.plan}
+
+Commands:
+/profile
+/help
+/ping`
+  );
 });
 
-bot.onText(/\/help/, (msg) => {
-  bot.sendMessage(msg.chat.id, "Commands:\n/start\n/help\n/ping");
+bot.onText(/\/profile/, (msg) => {
+  const user = getOrCreateUser(msg.from);
+
+  bot.sendMessage(
+    msg.chat.id,
+    `Profile:
+ID: ${user.telegramId}
+Username: ${user.username || "N/A"}
+Plan: ${user.plan}`
+  );
 });
 
 bot.onText(/\/ping/, (msg) => {
   bot.sendMessage(msg.chat.id, "Pong! Bot is alive.");
 });
 
-/* ===============================
-   MESSAGE LOGGER
-=============================== */
-bot.on("message", (msg) => {
-  if (!msg.text || msg.text.startsWith("/")) return;
-  console.log(`[${msg.chat.id}] ${msg.text}`);
+bot.onText(/\/help/, (msg) => {
+  bot.sendMessage(
+    msg.chat.id,
+    "Commands:\n/start\n/help\n/ping\n/profile"
+  );
 });
 
 /* ===============================
-   WEBHOOK ENDPOINT
+   MESSAGE LOGGER (SAFETY FILTERED)
+=============================== */
+bot.on("message", (msg) => {
+  if (!msg.text || msg.text.startsWith("/")) return;
+
+  console.log(`[USER ${msg.from.id}] ${msg.text}`);
+});
+
+/* ===============================
+   WEBHOOK ENDPOINT (ROBUST)
 =============================== */
 app.post(webhookPath, (req, res) => {
   try {
@@ -83,6 +139,16 @@ app.post(webhookPath, (req, res) => {
     console.error("Webhook error:", err);
     res.sendStatus(500);
   }
+});
+
+/* ===============================
+   HEALTH CHECK (IMPORTANT FOR SAAS)
+=============================== */
+app.get("/health", (req, res) => {
+  res.json({
+    status: "ok",
+    uptime: process.uptime()
+  });
 });
 
 /* ===============================
