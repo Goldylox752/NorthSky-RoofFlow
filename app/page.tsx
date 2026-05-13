@@ -22,11 +22,8 @@ export default function Home() {
   const [waitlistState, handleWaitlistSubmit] = useForm(FORM_ID);
   const [contactState, handleContactSubmit] = useForm(FORM_ID);
 
-  const isLoading = !!loadingPlan;
+  const isLoading = Boolean(loadingPlan);
 
-  /* ===============================
-     EVENT TRACKING
-  =============================== */
   const trackEvent = async (event: string, data?: any) => {
     try {
       await fetch(`https://formspree.io/f/${FORM_ID}`, {
@@ -37,9 +34,6 @@ export default function Home() {
     } catch {}
   };
 
-  /* ===============================
-     STRIPE CHECKOUT
-  =============================== */
   const checkout = async (planId: string) => {
     if (loadingPlan) return;
 
@@ -51,12 +45,8 @@ export default function Home() {
 
       const res = await api("/create-checkout-session", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          plan: planId,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: planId }),
       });
 
       if (!res?.url) {
@@ -79,9 +69,6 @@ export default function Home() {
     await handleContactSubmit(e);
   };
 
-  /* ===============================
-     EXIT INTENT POPUP (FIXED)
-  =============================== */
   useEffect(() => {
     let shown = false;
 
@@ -99,7 +86,6 @@ export default function Home() {
   return (
     <main style={styles.main}>
 
-      {/* HERO */}
       <section style={styles.hero}>
         <h1 style={styles.h1}>Launch SaaS faster</h1>
 
@@ -112,12 +98,11 @@ export default function Home() {
         </button>
       </section>
 
-      {/* WAITLIST */}
       <section style={styles.section}>
         <h2>Join Waitlist</h2>
 
         {waitlistState.succeeded ? (
-          <p>You’re in</p>
+          <p>You are in</p>
         ) : (
           <form onSubmit={handleWaitlist} style={styles.form}>
             <input name="email" placeholder="Email" style={styles.input} />
@@ -128,7 +113,6 @@ export default function Home() {
         )}
       </section>
 
-      {/* PRICING */}
       <section>
         {plans.map((p) => (
           <div key={p.id} style={styles.card}>
@@ -146,7 +130,6 @@ export default function Home() {
         ))}
       </section>
 
-      {/* CONTACT */}
       <section>
         <form onSubmit={handleContact} style={styles.form}>
           <input name="email" placeholder="Email" style={styles.input} />
@@ -157,7 +140,6 @@ export default function Home() {
         </form>
       </section>
 
-      {/* EXIT POPUP */}
       {showPopup && (
         <div style={styles.popupOverlay}>
           <div style={styles.popup}>
@@ -171,10 +153,8 @@ export default function Home() {
         </div>
       )}
 
-      {/* ERROR */}
       {error && <p style={{ color: "red" }}>{error}</p>}
 
-      {/* FOOTER */}
       <footer>© {year}</footer>
     </main>
   );
