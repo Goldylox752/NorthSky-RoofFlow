@@ -2,74 +2,59 @@ const router = require("express").Router();
 const stripe = require("../lib/stripe");
 const supabase = require("../lib/supabase");
 
+const auth = require("../../middleware/auth.middleware");
+
 /* ===============================
    CREATE BILLING PORTAL SESSION
 =============================== */
-router.post("/portal", async (req, res) => {
+router.post("/portal", auth, async (req, res) => {
   try {
-    const { email } = req.body;
+    const userId = req.user?.id;
 
     /* ===============================
        VALIDATION
     =============================== */
-    if (!email) {
-      return res.status(400).json({
+    if (!userId) {
+      return res.status(401).json({
         success: false,
-        stage: "validation",
-        error: "Missing email",
+        error: "Unauthorized",
       });
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
-
     /* ===============================
-       GET STRIPE CUSTOMER
+       GET STRIPE CUSTOMER ID
     =============================== */
-    const { data: user, error: userError } = await supabase
-      .from("leads")
+    const { data: user, error } = await supabase
+      .from("users")
       .select("stripe_customer_id")
-      .eq("email", normalizedEmail)
+      .eq("auth_id", userId)
       .maybeSingle();
 
-    if (userError) {
-      console.error("Supabase error:", userError);
+    if (error) {
+      console.error("Supabase error:", error);
       return res.status(500).json({
         success: false,
-        stage: "database_error",
-        error: "Failed to fetch user",
+        error: "Database error",
       });
     }
 
     if (!user?.stripe_customer_id) {
       return res.status(404).json({
         success: false,
-        stage: "not_found",
-        error: "No Stripe customer found for this email",
+        error: "No Stripe customer found",
       });
     }
 
     /* ===============================
-       CREATE BILLING PORTAL SESSION
+       CREATE STRIPE PORTAL SESSION
     =============================== */
     const session = await stripe.billingPortal.sessions.create({
       customer: user.stripe_customer_id,
       return_url: process.env.FRONTEND_URL,
     });
 
-    if (!session?.url) {
-      return res.status(500).json({
-        success: false,
-        stage: "stripe_error",
-        error: "Failed to create portal session",
-      });
-    }
-
-    /* ===============================
-       RESPONSE
-    =============================== */
     return res.json({
       success: true,
-      stage: "portal_created",
       url: session.url,
     });
 
@@ -78,8 +63,7 @@ router.post("/portal", async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      stage: "server_error",
-      error: err.message || "Unexpected error",
+      error: err.message || "server_error",
     });
   }
 });
