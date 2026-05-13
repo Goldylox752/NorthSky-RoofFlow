@@ -40,28 +40,28 @@ module.exports = async function auth(req, res, next) {
       });
     }
 
-    /* ===============================
-       CORE IDENTITY
-    =============================== */
-    const userId = data.user.id;
+    const user = data.user;
 
     /* ===============================
-       OPTIONAL: LIGHT DB ENRICHMENT
-       (safe + minimal, avoids over-fetching)
+       OPTIONAL DB PROFILE LOOKUP
     =============================== */
     const { data: profile } = await supabase
       .from("users")
       .select("stripe_customer_id, status")
-      .eq("auth_id", userId)
+      .eq("auth_id", user.id)
       .maybeSingle();
 
+    /* ===============================
+       ATTACH USER TO REQUEST
+    =============================== */
     req.user = {
-      id: userId,
+      id: user.id,
+      email: user.email || null, // ✅ FIX: needed for Stripe checkout
       stripe_customer_id: profile?.stripe_customer_id || null,
       status: profile?.status || "unknown",
     };
 
-    next();
+    return next();
 
   } catch (err) {
     console.error("Auth error:", err);
