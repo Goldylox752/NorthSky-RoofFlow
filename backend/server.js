@@ -2,81 +2,85 @@ require("dotenv").config();
 
 const app = require("./app");
 
-const PORT = process.env.PORT || 3001;
+const PORT = Number(process.env.PORT || 3001);
 
+/* ===============================
+   BASIC SAFETY CHECKS
+=============================== */
 if (!process.env.PORT) {
-  console.warn("⚠️ Using fallback port 3001 (local only)");
+  console.warn("⚠️ PORT not set — using fallback 3001");
 }
 
 /* ===============================
    START SERVER
 =============================== */
+let server;
 
-let server = null;
+const startServer = () => {
+  try {
+    server = app.listen(PORT, () => {
+      console.log(`
+🚀 Server Running
+📡 Port: ${PORT}
+❤️ Health: /health
+      `);
+    });
 
-try {
-  server = app.listen(PORT, () => {
-    console.log("=================================");
-    console.log("🚀 Server Running");
-    console.log(`📡 Port: ${PORT}`);
-    console.log("❤️ Health: /health");
-    console.log("=================================");
-    console.log("🚀 Server fully ready for requests");
-  });
+    // Render / cloud stability tuning
+    server.keepAliveTimeout = 65000;
+    server.headersTimeout = 66000;
+  } catch (err) {
+    console.error("❌ Server failed to start:", err);
+    process.exit(1);
+  }
+};
 
-  // Render stability tuning
-  server.keepAliveTimeout = 65000;
-  server.headersTimeout = 66000;
-
-} catch (err) {
-  console.error("❌ Failed to start server:", err);
-  process.exit(1);
-}
+startServer();
 
 /* ===============================
-   SHUTDOWN SYSTEM
+   GRACEFUL SHUTDOWN
 =============================== */
+let shuttingDown = false;
 
-let isShuttingDown = false;
+const shutdown = (signal, err = null) => {
+  if (shuttingDown) return;
+  shuttingDown = true;
 
-const shutdown = (reason, err = null, exitCode = 0) => {
-  if (isShuttingDown) return;
-  isShuttingDown = true;
-
-  console.log(`\n🛑 Shutdown triggered: ${reason}`);
+  console.log(`\n🛑 Shutdown: ${signal}`);
 
   if (err) console.error(err);
 
-  if (!server) return process.exit(exitCode);
+  if (!server) {
+    process.exit(1);
+  }
 
   server.close(() => {
     console.log("✅ Server closed cleanly");
-    process.exit(exitCode);
+    process.exit(0);
   });
 
+  // force exit fallback
   setTimeout(() => {
     console.error("⚠️ Forced shutdown timeout");
-    process.exit(exitCode);
+    process.exit(1);
   }, 10000).unref();
 };
 
 /* ===============================
    ERROR HANDLERS
 =============================== */
-
 process.on("uncaughtException", (err) => {
-  console.error("🔥 UNCAUGHT EXCEPTION");
-  shutdown("uncaughtException", err, 1);
+  console.error("🔥 Uncaught Exception");
+  shutdown("uncaughtException", err);
 });
 
 process.on("unhandledRejection", (err) => {
-  console.error("🔥 UNHANDLED REJECTION");
-  shutdown("unhandledRejection", err, 1);
+  console.error("🔥 Unhandled Rejection");
+  shutdown("unhandledRejection", err);
 });
 
 /* ===============================
    SIGNAL HANDLERS
 =============================== */
-
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
