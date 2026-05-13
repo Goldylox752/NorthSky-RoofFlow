@@ -41,15 +41,11 @@ app.use("/stripe-webhook", express.raw({ type: "application/json" }));
 app.use(express.json({ limit: "1mb" }));
 
 /* ===============================
-   WEBHOOKS
-=============================== */
-const TG_PATH = "/telegram-webhook";
-const TG_URL = `${WEBHOOK_URL}${TG_PATH}`;
-
-/* ===============================
-   IN-MEMORY USERS (replace with Supabase later)
+   USERS + STATE SYSTEM
 =============================== */
 const users = new Map();
+const state = new Map();
+const timers = new Map();
 
 function getUser(tgUser) {
   let user = users.get(tgUser.id);
@@ -61,60 +57,60 @@ function getUser(tgUser) {
       plan: "free",
       stripeSessionId: null,
       createdAt: Date.now(),
-      lastActive: Date.now(),
     };
-
     users.set(tgUser.id, user);
   }
 
-  user.lastActive = Date.now();
   return user;
 }
 
 const isPro = (u) => u.plan === "pro";
 
 /* ===============================
-   TELEGRAM MENU
+   STATE HELPERS
 =============================== */
-bot.setMyCommands([
-  { command: "start", description: "Start" },
-  { command: "plan", description: "View plan" },
-  { command: "profile", description: "Profile" },
-  { command: "upgrade", description: "Upgrade to PRO" },
-  { command: "help", description: "Help" },
-]);
+function setState(id, s) {
+  state.set(id, s);
+}
+
+function getState(id) {
+  return state.get(id) || "new";
+}
+
+function clearTimer(id) {
+  const t = timers.get(id);
+  if (t) clearTimeout(t);
+}
 
 /* ===============================
-   CONVERSION MESSAGE SYSTEM
+   SALES MESSAGE
 =============================== */
-
 function salesMessage(user) {
   return `
-🔥 YOUR ACCOUNT IS ACTIVE
+🔥 YOUR ACCESS IS READY
 
 Hi @${user.username}
 
-You are currently on the FREE plan.
+You're currently on FREE.
 
 ━━━━━━━━━━━━━━
-FREE LIMITS:
+FREE:
 • Limited access
 • Lower priority
-• Basic results only
+• Slower results
 ━━━━━━━━━━━━━━
 
-💎 PRO PLAN — $19/month
+💎 PRO — $19/month
 
-UNLOCK EVERYTHING:
+UNLOCK:
 ⚡ Instant priority access
-🎯 Higher quality results first
+🎯 Better results first
 🚀 Faster processing
-🔒 Exclusive system access
-📈 More opportunities per day
+📈 More opportunities
 
 ━━━━━━━━━━━━━━
-WHY PEOPLE UPGRADE:
-Users on PRO consistently get better results because they act first.
+WHY PRO WORKS:
+Users who upgrade get results before everyone else.
 
 👉 Upgrade here:
 ${CLIENT_URL}/checkout?plan=pro
@@ -122,31 +118,76 @@ ${CLIENT_URL}/checkout?plan=pro
 }
 
 /* ===============================
-   TELEGRAM COMMANDS
+   TELEGRAM MENU
 =============================== */
+bot.setMyCommands([
+  { command: "start", description: "Start" },
+  { command: "plan", description: "Plan" },
+  { command: "profile", description: "Profile" },
+  { command: "upgrade", description: "Upgrade" },
+  { command: "help", description: "Help" },
+]);
 
+/* ===============================
+   START + FOLLOW-UP FLOW
+=============================== */
 bot.onText(/\/start/, (msg) => {
   const user = getUser(msg.from);
 
+  setState(user.id, "started");
+
   bot.sendMessage(msg.chat.id, salesMessage(user));
+
+  clearTimer(user.id);
+
+  // FOLLOW UP #1 (30s)
+  const t1 = setTimeout(() => {
+    if (!isPro(user)) {
+      bot.sendMessage(
+        user.id,
+        `Quick question 👀
+
+Do you want me to show you why PRO users get better results?`
+      );
+    }
+  }, 30000);
+
+  timers.set(user.id, t1);
+
+  // FOLLOW UP #2 (3 min)
+  const t2 = setTimeout(() => {
+    if (!isPro(user)) {
+      bot.sendMessage(
+        user.id,
+        `Still thinking?
+
+Most users upgrade because they don’t want to miss better opportunities.
+
+Upgrade anytime here:
+${CLIENT_URL}/checkout?plan=pro`
+      );
+    }
+  }, 180000);
+
+  timers.set(user.id, t2);
 });
 
+/* ===============================
+   PLAN / PROFILE
+=============================== */
 bot.onText(/\/plan/, (msg) => {
   const user = getUser(msg.from);
 
   bot.sendMessage(
     msg.chat.id,
-`PLAN STATUS
-
-Current: ${user.plan.toUpperCase()}
+`PLAN: ${user.plan.toUpperCase()}
 
 FREE:
 - Basic access
 
 PRO:
 - Priority system access
-- Faster results
-- Full features`
+- Faster results`
   );
 });
 
@@ -163,27 +204,22 @@ Plan: ${user.plan}`
 });
 
 /* ===============================
-   UPGRADE FLOW (STRIPE)
+   UPGRADE (STRIPE)
 =============================== */
-
 bot.onText(/\/upgrade/, async (msg) => {
   const user = getUser(msg.from);
 
+  setState(user.id, "checkout_started");
+
   if (isPro(user)) {
-    return bot.sendMessage(msg.chat.id, "You already have PRO access.");
+    return bot.sendMessage(msg.chat.id, "You already have PRO.");
   }
 
   try {
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       payment_method_types: ["card"],
-
-      line_items: [
-        {
-          price: STRIPE_PRICE_ID,
-          quantity: 1,
-        },
-      ],
+      line_items: [{ price: STRIPE_PRICE_ID, quantity: 1 }],
 
       success_url: `${CLIENT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${CLIENT_URL}/cancel`,
@@ -201,16 +237,34 @@ bot.onText(/\/upgrade/, async (msg) => {
 
 ${session.url}`
     );
+
+    clearTimer(user.id);
+
+    // ABANDONMENT FOLLOW-UP (10 min)
+    const t3 = setTimeout(() => {
+      if (!isPro(user)) {
+        bot.sendMessage(
+          user.id,
+          `You still haven't finished upgrading.
+
+Your PRO access is waiting.
+
+👉 ${session.url}`
+        );
+      }
+    }, 600000);
+
+    timers.set(user.id, t3);
+
   } catch (err) {
-    console.error("Stripe error:", err);
-    bot.sendMessage(msg.chat.id, "Payment system error. Try again later.");
+    console.error(err);
+    bot.sendMessage(msg.chat.id, "Payment error. Try again later.");
   }
 });
 
 /* ===============================
-   STRIPE WEBHOOK (AUTO UPGRADE)
+   STRIPE WEBHOOK
 =============================== */
-
 app.post("/stripe-webhook", (req, res) => {
   let event;
 
@@ -221,7 +275,6 @@ app.post("/stripe-webhook", (req, res) => {
       STRIPE_WEBHOOK_SECRET
     );
   } catch (err) {
-    console.error("Webhook failed:", err.message);
     return res.sendStatus(400);
   }
 
@@ -233,10 +286,13 @@ app.post("/stripe-webhook", (req, res) => {
 
     if (user) {
       user.plan = "pro";
+      setState(userId, "pro");
+
+      clearTimer(userId);
 
       bot.sendMessage(
         userId,
-        "🎉 Payment confirmed — PRO activated instantly."
+        "🎉 PRO activated instantly. Welcome!"
       );
     }
   }
@@ -245,23 +301,20 @@ app.post("/stripe-webhook", (req, res) => {
 });
 
 /* ===============================
-   TELEGRAM WEBHOOK ENDPOINT
+   TELEGRAM WEBHOOK
 =============================== */
-
-app.post(TG_PATH, (req, res) => {
+app.post("/telegram-webhook", (req, res) => {
   try {
     bot.processUpdate(req.body);
     res.sendStatus(200);
   } catch (err) {
-    console.error("Telegram webhook error:", err);
     res.sendStatus(500);
   }
 });
 
 /* ===============================
-   HEALTH CHECK
+   HEALTH
 =============================== */
-
 app.get("/health", (req, res) => {
   const all = Array.from(users.values());
 
@@ -273,9 +326,8 @@ app.get("/health", (req, res) => {
 });
 
 /* ===============================
-   START SERVER
+   START
 =============================== */
-
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
