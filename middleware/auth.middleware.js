@@ -1,120 +1,46 @@
 const { verifyToken } = require("../lib/jwt");
-const logger = require("../lib/logger");
+const { getSession } = require("../lib/sessionStore");
 
-/* ===============================
-   EXTRACT TOKEN
-=============================== */
-const getTokenFromHeader = (req) => {
-  const authHeader = req.headers.authorization;
-
-  if (!authHeader) return null;
-
-  // Format: Bearer <token>
-  const parts = authHeader.split(" ");
-
-  if (parts.length !== 2 || parts[0] !== "Bearer") {
-    return null;
-  }
-
-  return parts[1];
-};
-
-/* ===============================
-   AUTH MIDDLEWARE (CORE)
-=============================== */
-const requireAuth = (req, res, next) => {
+const auth = (req, res, next) => {
   try {
-    const token = getTokenFromHeader(req);
+    const header = req.headers.authorization;
 
-    if (!token) {
+    if (!header || !header.startsWith("Bearer ")) {
       return res.status(401).json({
         success: false,
-        error: "Missing auth token",
+        error: "Missing token",
       });
     }
 
+    const token = header.split(" ")[1];
+
     const decoded = verifyToken(token);
 
-    // attach user to request
+    // 🔐 session validation (CRITICAL)
+    const session = getSession(decoded.jti);
+
+    if (!session) {
+      return res.status(401).json({
+        success: false,
+        error: "Session expired or revoked",
+      });
+    }
+
     req.user = {
       id: decoded.id,
       email: decoded.email,
-      role: decoded.role || "user",
-      plan: decoded.plan || "starter",
+      role: decoded.role,
+      plan: decoded.plan,
+      jti: decoded.jti,
     };
 
     next();
   } catch (err) {
-    logger.warn(
-      {
-        error: err.message,
-        path: req.path,
-      },
-      "Auth failed"
-    );
-
     return res.status(401).json({
       success: false,
-      error: "Invalid or expired token",
+      error: "Unauthorized",
     });
   }
 };
 
-/* ===============================
-   ROLE-BASED ACCESS
-=============================== */
-const requireRole = (role) => {
-  return (req, res, next) => {
-    if (!req.user) {
-      return res.status(401).json({
-        success: false,
-        error: "Not authenticated",
-      });
-    }
-
-    if (req.user.role !== role) {
-      return res.status(403).json({
-        success: false,
-        error: "Insufficient permissions",
-        requiredRole: role,
-        currentRole: req.user.role,
-      });
-    }
-
-    next();
-  };
-};
-
-/* ===============================
-   OPTIONAL AUTH (PUBLIC ROUTES)
-=============================== */
-const optionalAuth = (req, res, next) => {
-  try {
-    const token = getTokenFromHeader(req);
-
-    if (!token) return next();
-
-    const decoded = verifyToken(token);
-
-    req.user = {
-      id: decoded.id,
-      email: decoded.email,
-      role: decoded.role || "user",
-      plan: decoded.plan || "starter",
-    };
-
-    next();
-  } catch {
-    // ignore invalid token
-    next();
-  }
-};
-
-/* ===============================
-   EXPORTS
-=============================== */
-module.exports = {
-  requireAuth,
-  requireRole,
-  optionalAuth,
-};
+module.exports = auth;
