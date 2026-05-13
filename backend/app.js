@@ -12,22 +12,22 @@ const app = express();
 app.set("trust proxy", 1);
 
 /* ===============================
-   SECURITY HEADERS
+   SECURITY
 =============================== */
 app.disable("x-powered-by");
 
 /* ===============================
-   RATE LIMIT (ANTI ABUSE)
+   RATE LIMIT
 =============================== */
 const limiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 120, // requests per IP
+  windowMs: 60 * 1000,
+  max: 120,
 });
 
 app.use(limiter);
 
 /* ===============================
-   CORS (SAFER SAAS CONFIG)
+   CORS
 =============================== */
 const allowedOrigins = new Set([
   process.env.FRONTEND_URL,
@@ -38,11 +38,7 @@ app.use(
   cors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
-
-      if (allowedOrigins.has(origin)) {
-        return callback(null, true);
-      }
-
+      if (allowedOrigins.has(origin)) return callback(null, true);
       return callback(null, false);
     },
     credentials: true,
@@ -50,21 +46,27 @@ app.use(
 );
 
 /* ===============================
-   BODY PARSING
+   BODY PARSER
 =============================== */
 app.use(express.json({ limit: "2mb" }));
 
 /* ===============================
-   REQUEST LOGGING (DEBUG SAFE)
+   REQUEST LOGGER
 =============================== */
 app.use((req, res, next) => {
-  console.log(`[${req.method}] ${req.path}`);
+  console.log(req.method, req.path);
   next();
 });
 
 /* ===============================
-   ROUTES
+   ROUTES (IMPORTANT FIX)
 =============================== */
+
+/*
+   All API routes are now grouped under /api
+   This avoids "Not found" confusion and keeps SaaS structure clean
+*/
+
 app.use("/api/webhook", require("./routes/webhook"));
 app.use("/api/payments", require("./routes/payments"));
 app.use("/api/telegram", require("./routes/telegramWebhook"));
@@ -76,7 +78,7 @@ app.get("/health", (req, res) => {
   res.json({
     success: true,
     status: "healthy",
-    service: "Flow OS Backend",
+    service: "SaaS Backend",
     time: new Date().toISOString(),
   });
 });
@@ -87,7 +89,7 @@ app.get("/health", (req, res) => {
 app.get("/", (req, res) => {
   res.json({
     success: true,
-    message: "Flow OS backend running",
+    message: "SaaS backend running",
   });
 });
 
@@ -105,7 +107,7 @@ app.use((req, res) => {
    GLOBAL ERROR HANDLER
 =============================== */
 app.use((err, req, res, next) => {
-  console.error("🔥 ERROR:", err);
+  console.error("ERROR:", err);
 
   res.status(500).json({
     success: false,
