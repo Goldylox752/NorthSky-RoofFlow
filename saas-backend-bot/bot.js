@@ -1,12 +1,15 @@
 require("dotenv").config();
 const express = require("express");
 const TelegramBot = require("node-telegram-bot-api");
+const Stripe = require("stripe");
 
 /* ===============================
    ENV
 =============================== */
 const token = process.env.TELEGRAM_BOT_TOKEN;
 const webhookUrl = process.env.WEBHOOK_URL;
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
 const PORT = process.env.PORT || 3000;
 
 if (!token || !webhookUrl) {
@@ -32,14 +35,14 @@ const webhookPath = "/telegram-webhook";
 const fullWebhookUrl = `${webhookUrl}${webhookPath}`;
 
 /* ===============================
-   TELEGRAM COMMAND MENU
+   COMMAND MENU
 =============================== */
 bot.setMyCommands([
   { command: "start", description: "Start bot" },
   { command: "help", description: "Help menu" },
   { command: "ping", description: "Check bot status" },
   { command: "profile", description: "View profile" },
-  { command: "plan", description: "View subscription plan" },
+  { command: "plan", description: "View plan" },
   { command: "upgrade", description: "Upgrade to PRO" }
 ]);
 
@@ -58,8 +61,7 @@ async function initWebhook() {
 initWebhook();
 
 /* ===============================
-   SAAS USER STORE (TEMP MEMORY DB)
-   (Replace with MongoDB later)
+   SAAS USER STORE (TEMP DB)
 =============================== */
 const users = new Map();
 
@@ -71,6 +73,7 @@ function getOrCreateUser(tgUser) {
       telegramId: tgUser.id,
       username: tgUser.username || "unknown",
       plan: "free",
+      stripeSessionId: null,
       createdAt: new Date()
     };
 
@@ -81,7 +84,7 @@ function getOrCreateUser(tgUser) {
 }
 
 /* ===============================
-   UPGRADE SYSTEM (SaaS CORE)
+   UPGRADE SYSTEM (LOCAL FALLBACK)
 =============================== */
 function upgradeUser(user) {
   user.plan = "pro";
@@ -89,7 +92,7 @@ function upgradeUser(user) {
 }
 
 /* ===============================
-   COMMANDS
+   START
 =============================== */
 bot.onText(/\/start/, (msg) => {
   const user = getOrCreateUser(msg.from);
@@ -103,11 +106,13 @@ Plan: ${user.plan}
 Commands:
 /profile
 /plan
-/upgrade
-/help`
+/upgrade`
   );
 });
 
+/* ===============================
+   PROFILE
+=============================== */
 bot.onText(/\/profile/, (msg) => {
   const user = getOrCreateUser(msg.from);
 
@@ -120,6 +125,9 @@ Plan: ${user.plan}`
   );
 });
 
+/* ===============================
+   PLAN
+=============================== */
 bot.onText(/\/plan/, (msg) => {
   const user = getOrCreateUser(msg.from);
 
@@ -127,41 +135,96 @@ bot.onText(/\/plan/, (msg) => {
     msg.chat.id,
     `Current Plan: ${user.plan}
 
-Available plans:
-- free
-- pro`
+Free:
+- Basic features
+
+PRO:
+- Full access`
   );
 });
 
 /* ===============================
-   UPGRADE COMMAND (SAAS CORE HOOK)
+   UPGRADE (REAL STRIPE)
 =============================== */
-bot.onText(/\/upgrade/, (msg) => {
+bot.onText(/\/upgrade/, async (msg) => {
   const user = getOrCreateUser(msg.from);
 
   if (user.plan === "pro") {
     return bot.sendMessage(msg.chat.id, "You are already PRO.");
   }
 
-  bot.sendMessage(
-    msg.chat.id,
-    `Upgrade system ready.
+  try {
+    const session = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      payment_method_types: ["card"],
+      line_items: [
+        {
+          price: process.env.STRIPE_PRICE_ID,
+          quantity: 1
+        }
+      ],
+      success_url: `${webhookUrl}/success`,
+      cancel_url: `${webhookUrl}/cancel`,
+      metadata: {
+        telegramId: user.telegramId
+      }
+    });
 
-Current plan: free
-Target plan: pro
+    user.stripeSessionId = session.id;
 
-Next step: connect Stripe payment.`
-  );
-
-  // TEMP AUTO UPGRADE (REMOVE when Stripe is added)
-  upgradeUser(user);
-
-  bot.sendMessage(
-    msg.chat.id,
-    "You have been upgraded to PRO (demo mode)."
-  );
+    bot.sendMessage(
+      msg.chat.id,
+      `Upgrade to PRO here:\n${session.url}`
+    );
+  } catch (err) {
+    console.error(err);
+    bot.sendMessage(msg.chat.id, "Payment error occurred.");
+  }
 });
 
+/* ===============================
+   STRIPE WEBHOOK (AUTO UPGRADE)
+=============================== */
+app.post("/stripe-webhook", express.raw({ type: "application/json" }), (req, res) => {
+  const sig = req.headers["stripe-signature"];
+
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
+  } catch (err) {
+    console.error("Webhook error:", err.message);
+    return res.sendStatus(400);
+  }
+
+  if (event.type === "checkout.session.completed") {
+    const session = event.data.object;
+    const telegramId = session.metadata.telegramId;
+
+    const user = Array.from(users.values()).find(
+      (u) => u.telegramId == telegramId
+    );
+
+    if (user) {
+      user.plan = "pro";
+
+      bot.sendMessage(
+        user.telegramId,
+        "Payment successful. You are now PRO."
+      );
+    }
+  }
+
+  res.sendStatus(200);
+});
+
+/* ===============================
+   HELP
+=============================== */
 bot.onText(/\/help/, (msg) => {
   bot.sendMessage(
     msg.chat.id,
@@ -169,16 +232,18 @@ bot.onText(/\/help/, (msg) => {
   );
 });
 
+/* ===============================
+   PING
+=============================== */
 bot.onText(/\/ping/, (msg) => {
   bot.sendMessage(msg.chat.id, "Pong! Bot is alive.");
 });
 
 /* ===============================
-   MESSAGE HANDLER (SAFE LOGGING)
+   MESSAGE LOGGER
 =============================== */
 bot.on("message", (msg) => {
   if (!msg.text || msg.text.startsWith("/")) return;
-
   console.log(`[USER ${msg.from.id}] ${msg.text}`);
 });
 
@@ -196,12 +261,11 @@ app.post(webhookPath, (req, res) => {
 });
 
 /* ===============================
-   HEALTH CHECK (SAAS MONITORING)
+   HEALTH CHECK
 =============================== */
 app.get("/health", (req, res) => {
   res.json({
     status: "ok",
-    uptime: process.uptime(),
     users: users.size,
     proUsers: Array.from(users.values()).filter(u => u.plan === "pro").length
   });
