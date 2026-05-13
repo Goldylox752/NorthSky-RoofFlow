@@ -1,14 +1,16 @@
 async function handleStripeEvent(event) {
   const eventId = event.id;
   const type = event.type;
+  const payload = event.data?.object;
 
   try {
     /* ===============================
-       IDEMPOTENCY CHECK (SAFE)
+       IDEMPOTENCY CHECK (CRITICAL FIX)
     =============================== */
+
     const { data: existing } = await supabase
       .from("billing_events")
-      .select("id")
+      .select("stripe_event_id")
       .eq("stripe_event_id", eventId)
       .maybeSingle();
 
@@ -18,47 +20,51 @@ async function handleStripeEvent(event) {
     }
 
     /* ===============================
-       MAIN ROUTER
+       PROCESS EVENT
     =============================== */
+
     switch (type) {
 
       /* ===============================
          CHECKOUT COMPLETED
       =============================== */
+
       case "checkout.session.completed": {
-        const session = event.data.object;
+        const session = payload;
 
         const authId = session.metadata?.auth_id;
         const plan = session.metadata?.plan || "starter";
-        const customerId = session.customer;
-        const subscriptionId = session.subscription;
 
         if (!authId) {
-          console.error("Missing auth_id in session:", session.id);
+          await logBillingEvent(eventId, type, payload, "failed_auth_missing");
 
-          await supabase.from("billing_events").insert({
-            stripe_event_id: eventId,
-            type,
-            payload: session,
-            status: "failed_auth_missing",
-            created_at: new Date().toISOString(),
-          });
-
+          console.error("Missing auth_id:", session.id);
           return;
         }
 
-        await supabase.from("subscriptions").upsert(
-          {
-            auth_id: authId,
-            stripe_customer_id: customerId,
-            stripe_subscription_id: subscriptionId,
-            plan,
-            status: "active",
-            active: true,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "auth_id" }
-        );
+        const customerId = session.customer;
+        const subscriptionId = session.subscription || null;
+
+        /* ===============================
+           UPSERT SUBSCRIPTION (SOURCE OF TRUTH)
+        =============================== */
+
+        const { error } = await supabase
+          .from("subscriptions")
+          .upsert(
+            {
+              auth_id: authId,
+              stripe_customer_id: customerId,
+              stripe_subscription_id: subscriptionId,
+              plan,
+              status: "active",
+              active: true,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "auth_id" }
+          );
+
+        if (error) throw error;
 
         break;
       }
@@ -66,10 +72,11 @@ async function handleStripeEvent(event) {
       /* ===============================
          SUBSCRIPTION UPDATED
       =============================== */
-      case "customer.subscription.updated": {
-        const sub = event.data.object;
 
-        await supabase
+      case "customer.subscription.updated": {
+        const sub = payload;
+
+        const { error } = await supabase
           .from("subscriptions")
           .update({
             status: sub.status,
@@ -78,16 +85,19 @@ async function handleStripeEvent(event) {
           })
           .eq("stripe_customer_id", sub.customer);
 
+        if (error) throw error;
+
         break;
       }
 
       /* ===============================
          SUBSCRIPTION CANCELED
       =============================== */
-      case "customer.subscription.deleted": {
-        const sub = event.data.object;
 
-        await supabase
+      case "customer.subscription.deleted": {
+        const sub = payload;
+
+        const { error } = await supabase
           .from("subscriptions")
           .update({
             status: "canceled",
@@ -96,12 +106,34 @@ async function handleStripeEvent(event) {
           })
           .eq("stripe_customer_id", sub.customer);
 
+        if (error) throw error;
+
+        break;
+      }
+
+      /* ===============================
+         INVOICE PAID (IMPORTANT ADDITION)
+      =============================== */
+
+      case "invoice.paid": {
+        const invoice = payload;
+
+        await supabase
+          .from("subscriptions")
+          .update({
+            status: "active",
+            active: true,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("stripe_customer_id", invoice.customer);
+
         break;
       }
 
       /* ===============================
          DEFAULT
       =============================== */
+
       default:
         console.log("Unhandled event:", type);
     }
@@ -109,29 +141,35 @@ async function handleStripeEvent(event) {
     /* ===============================
        EVENT LOG (SUCCESS)
     =============================== */
-    await supabase.from("billing_events").insert({
-      stripe_event_id: eventId,
-      type,
-      payload: event.data.object,
-      status: "processed",
-      created_at: new Date().toISOString(),
-    });
+
+    await logBillingEvent(eventId, type, payload, "processed");
 
   } catch (err) {
     console.error("Webhook handler error:", err);
 
-    /* ===============================
-       EVENT LOG (FAILURE)
-    =============================== */
-    await supabase.from("billing_events").insert({
-      stripe_event_id: eventId,
+    await logBillingEvent(
+      eventId,
       type,
-      payload: event.data?.object || null,
-      status: "failed",
-      error: err.message,
-      created_at: new Date().toISOString(),
-    });
+      payload,
+      "failed",
+      err.message
+    );
 
     throw err;
   }
+}
+
+/* ===============================
+   SAFE EVENT LOGGER (REUSABLE)
+=============================== */
+
+async function logBillingEvent(eventId, type, payload, status, error = null) {
+  return supabase.from("billing_events").insert({
+    stripe_event_id: eventId,
+    type,
+    payload,
+    status,
+    error,
+    created_at: new Date().toISOString(),
+  });
 }
