@@ -24,7 +24,16 @@ const FEATURES = {
 =============================== */
 const normalizePlan = (plan) => {
   if (!plan || typeof plan !== "string") return "starter";
-  return plan.toLowerCase();
+  return plan.toLowerCase().trim();
+};
+
+/* ===============================
+   PLAN PRIORITY (UPGRADE LOGIC)
+=============================== */
+const PLAN_LEVEL = {
+  starter: 1,
+  growth: 2,
+  elite: 3,
 };
 
 /* ===============================
@@ -36,16 +45,25 @@ const getPlan = (plan) => {
 };
 
 /* ===============================
-   FEATURE CHECK (CORE LOGIC)
+   FEATURE CHECK
 =============================== */
 const hasFeature = (plan, feature) => {
-  const planFeatures = getPlan(plan);
-  return planFeatures?.[feature] === true;
+  const features = getPlan(plan);
+  return Boolean(features?.[feature]);
 };
 
 /* ===============================
-   REQUIRED FEATURE GUARD
-   (USE IN MIDDLEWARE)
+   PLAN COMPARISON (IMPORTANT FOR SAAS)
+=============================== */
+const hasPlanAccess = (userPlan, requiredPlan) => {
+  const userLevel = PLAN_LEVEL[normalizePlan(userPlan)] || 0;
+  const requiredLevel = PLAN_LEVEL[normalizePlan(requiredPlan)] || 1;
+
+  return userLevel >= requiredLevel;
+};
+
+/* ===============================
+   FEATURE MIDDLEWARE (PRODUCTION SAFE)
 =============================== */
 const requireFeature = (feature) => {
   return (req, res, next) => {
@@ -55,7 +73,8 @@ const requireFeature = (feature) => {
       return res.status(403).json({
         success: false,
         error: `Feature "${feature}" requires upgrade`,
-        plan,
+        currentPlan: normalizePlan(plan),
+        requiredFeature: feature,
       });
     }
 
@@ -63,9 +82,34 @@ const requireFeature = (feature) => {
   };
 };
 
+/* ===============================
+   PLAN MIDDLEWARE (LEVEL-BASED)
+=============================== */
+const requirePlan = (requiredPlan) => {
+  return (req, res, next) => {
+    const userPlan = req.user?.plan;
+
+    if (!hasPlanAccess(userPlan, requiredPlan)) {
+      return res.status(403).json({
+        success: false,
+        error: "Upgrade required",
+        currentPlan: normalizePlan(userPlan),
+        requiredPlan: normalizePlan(requiredPlan),
+      });
+    }
+
+    next();
+  };
+};
+
+/* ===============================
+   EXPORTS
+=============================== */
 module.exports = {
   FEATURES,
   getPlan,
   hasFeature,
   requireFeature,
+  requirePlan,
+  hasPlanAccess,
 };
