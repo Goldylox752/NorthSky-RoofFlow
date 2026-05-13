@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { getSupabaseServer } from "@/lib/supabaseServer";
 
 export async function GET() {
@@ -11,21 +12,30 @@ export async function GET() {
       );
     }
 
-    const { data, error } = await supabase.auth.getUser();
+    /* ===============================
+       GET USER FROM SESSION COOKIE
+    =============================== */
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
 
-    if (error) {
+    if (error || !user) {
       return Response.json(
-        { error: error.message },
+        { error: "Unauthorized" },
         { status: 401 }
       );
     }
 
     return Response.json({
-      user: data?.user ?? null
+      user,
     });
   } catch (err) {
     return Response.json(
-      { error: "Server error", details: err.message },
+      {
+        error: "Server error",
+        details: err?.message || "unknown",
+      },
       { status: 500 }
     );
   }
