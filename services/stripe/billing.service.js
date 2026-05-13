@@ -5,6 +5,8 @@ const supabase = require("../../lib/supabase");
    GET STRIPE CUSTOMER
 =============================== */
 async function getStripeCustomer(authId) {
+  if (!authId) throw new Error("authId is required");
+
   const { data, error } = await supabase
     .from("users")
     .select("stripe_customer_id")
@@ -12,12 +14,12 @@ async function getStripeCustomer(authId) {
     .single();
 
   if (error) {
-    console.error("Supabase error:", error);
-    throw new Error("Failed to fetch user");
+    console.error("Supabase error (getStripeCustomer):", error);
+    throw new Error("Failed to fetch user from database");
   }
 
   if (!data?.stripe_customer_id) {
-    throw new Error("User has no Stripe customer");
+    throw new Error("User has no Stripe customer linked");
   }
 
   return data.stripe_customer_id;
@@ -27,27 +29,31 @@ async function getStripeCustomer(authId) {
    GET ACTIVE SUBSCRIPTION
 =============================== */
 async function getActiveSubscription(customerId) {
-  const { data } = await stripe.subscriptions.list({
+  const subs = await stripe.subscriptions.list({
     customer: customerId,
     status: "active",
     limit: 1,
   });
 
-  return data?.[0] || null;
+  return subs?.data?.[0] || null;
 }
 
 /* ===============================
-   CANCEL SUBSCRIPTION (SAFETY VERSION)
+   CANCEL SUBSCRIPTION (SAFE FLOW)
 =============================== */
 exports.cancelSubscription = async (authId) => {
   if (!authId) {
     throw new Error("authId is required");
   }
 
-  // 1. Get Stripe customer
+  /* ===============================
+     1. GET CUSTOMER
+  =============================== */
   const customerId = await getStripeCustomer(authId);
 
-  // 2. Find active subscription
+  /* ===============================
+     2. GET ACTIVE SUBSCRIPTION
+  =============================== */
   const subscription = await getActiveSubscription(customerId);
 
   if (!subscription) {
@@ -58,20 +64,30 @@ exports.cancelSubscription = async (authId) => {
     };
   }
 
-  // 3. Cancel at period end (safe billing behavior)
-  const canceled = await stripe.subscriptions.update(subscription.id, {
-    cancel_at_period_end: true,
-  });
-
-  if (!canceled) {
-    throw new Error("Stripe cancellation failed");
+  /* ===============================
+     3. CANCEL SAFELY (END OF PERIOD)
+  =============================== */
+  let canceled;
+  try {
+    canceled = await stripe.subscriptions.update(subscription.id, {
+      cancel_at_period_end: true,
+    });
+  } catch (err) {
+    console.error("Stripe cancellation error:", err);
+    throw new Error("Failed to cancel Stripe subscription");
   }
 
-  // 4. Update Supabase user status
+  if (!canceled?.id) {
+    throw new Error("Stripe did not return a valid response");
+  }
+
+  /* ===============================
+     4. SYNC SUPABASE STATE
+  =============================== */
   const { error } = await supabase
     .from("users")
     .update({
-      status: "canceled",
+      status: "canceling",
       subscription_status: "canceling",
       subscription_id: subscription.id,
       updated_at: new Date().toISOString(),
@@ -80,9 +96,12 @@ exports.cancelSubscription = async (authId) => {
 
   if (error) {
     console.error("Supabase update error:", error);
-    throw new Error("Failed to update user subscription status");
+    throw new Error("Failed to update user subscription in database");
   }
 
+  /* ===============================
+     5. RESPONSE
+  =============================== */
   return {
     success: true,
     status: "canceling",
