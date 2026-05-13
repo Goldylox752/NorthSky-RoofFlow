@@ -3,33 +3,35 @@ const stripe = require("../lib/stripe");
 const auth = require("../../middleware/auth.middleware");
 
 /* ===============================
-   PRICES (IN CENTS - STRIPE SAFE)
+   PLAN CONFIG (FIXED MODEL)
+   NOTE: Stripe expects unit_amount in cents
 =============================== */
 const PRICES = {
-  starter: 10000, // $100.00
-  pro: 20000,     // $200.00
+  starter: 10000,
+  pro: 20000,
 };
 
 /* ===============================
-   CHECKOUT SESSION (AUTH REQUIRED)
+   CREATE CHECKOUT SESSION
 =============================== */
 router.post("/checkout", auth, async (req, res) => {
   try {
-    const { id, email } = req.user;
+    const user = req.user;
     const { plan = "starter" } = req.body;
 
-    const amount = PRICES[plan];
+    const unitAmount = PRICES[plan];
 
-    if (!amount) {
+    if (!unitAmount) {
       return res.status(400).json({
         success: false,
-        error: "Invalid plan",
+        error: "invalid_plan",
       });
     }
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
-      customer_email: email || undefined,
+
+      customer_email: user.email || undefined,
 
       payment_method_types: ["card"],
 
@@ -40,14 +42,14 @@ router.post("/checkout", auth, async (req, res) => {
             product_data: {
               name: `Flow OS - ${plan}`,
             },
-            unit_amount: amount,
+            unit_amount: unitAmount,
           },
           quantity: 1,
         },
       ],
 
       metadata: {
-        auth_id: id,
+        auth_id: user.id,
         plan,
       },
 
@@ -59,19 +61,18 @@ router.post("/checkout", auth, async (req, res) => {
       success: true,
       url: session.url,
     });
-
   } catch (err) {
     console.error("Checkout error:", err);
 
     return res.status(500).json({
       success: false,
-      error: err.message || "checkout_failed",
+      error: "checkout_failed",
     });
   }
 });
 
 /* ===============================
-   VERIFY PAYMENT (UI CHECK ONLY)
+   VERIFY SESSION (READ-ONLY CHECK)
 =============================== */
 router.get("/verify", async (req, res) => {
   try {
@@ -81,7 +82,7 @@ router.get("/verify", async (req, res) => {
       return res.status(400).json({
         success: false,
         paid: false,
-        error: "Missing session_id",
+        error: "missing_session_id",
       });
     }
 
@@ -93,14 +94,13 @@ router.get("/verify", async (req, res) => {
       email: session.customer_email || null,
       plan: session.metadata?.plan || null,
     });
-
   } catch (err) {
     console.error("Verify error:", err);
 
     return res.status(500).json({
       success: false,
       paid: false,
-      error: err.message || "verify_failed",
+      error: "verify_failed",
     });
   }
 });
