@@ -1,4 +1,5 @@
 require("dotenv").config();
+
 const express = require("express");
 const TelegramBot = require("node-telegram-bot-api");
 const Stripe = require("stripe");
@@ -6,100 +7,86 @@ const Stripe = require("stripe");
 /* ===============================
    ENV
 =============================== */
-const token = process.env.TELEGRAM_BOT_TOKEN;
-const webhookUrl = process.env.WEBHOOK_URL;
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const {
+  TELEGRAM_BOT_TOKEN,
+  WEBHOOK_URL,
+  STRIPE_SECRET_KEY,
+  STRIPE_PRICE_ID,
+  STRIPE_WEBHOOK_SECRET,
+  PORT = 3000,
+} = process.env;
 
-const PORT = process.env.PORT || 3000;
-
-if (!token || !webhookUrl) {
-  console.error("Missing TELEGRAM_BOT_TOKEN or WEBHOOK_URL");
+if (!TELEGRAM_BOT_TOKEN || !WEBHOOK_URL || !STRIPE_SECRET_KEY) {
+  console.error("Missing required environment variables");
   process.exit(1);
 }
 
 /* ===============================
-   APP INIT
+   INIT SERVICES
 =============================== */
 const app = express();
+const stripe = new Stripe(STRIPE_SECRET_KEY, {
+  apiVersion: "2025-04-30.basil",
+  maxNetworkRetries: 2,
+  timeout: 30000,
+});
 
-/* IMPORTANT:
-   Stripe webhook needs raw body BEFORE json parser
-*/
+/* IMPORTANT: Stripe raw body must come first */
 app.use("/stripe-webhook", express.raw({ type: "application/json" }));
 app.use(express.json({ limit: "1mb" }));
 
-/* ===============================
-   BOT INIT (NO POLLING)
-=============================== */
-const bot = new TelegramBot(token);
+const bot = new TelegramBot(TELEGRAM_BOT_TOKEN);
 
 /* ===============================
    WEBHOOK CONFIG
 =============================== */
-const webhookPath = "/telegram-webhook";
-const fullWebhookUrl = `${webhookUrl}${webhookPath}`;
+const TELEGRAM_WEBHOOK_PATH = "/telegram-webhook";
+const TELEGRAM_WEBHOOK_URL = `${WEBHOOK_URL}${TELEGRAM_WEBHOOK_PATH}`;
 
 /* ===============================
-   COMMAND MENU
-=============================== */
-bot.setMyCommands([
-  { command: "start", description: "Start bot" },
-  { command: "help", description: "Help menu" },
-  { command: "ping", description: "Check bot status" },
-  { command: "profile", description: "View profile" },
-  { command: "plan", description: "View plan" },
-  { command: "upgrade", description: "Upgrade to PRO" }
-]);
-
-/* ===============================
-   SET WEBHOOK
-=============================== */
-async function initWebhook() {
-  try {
-    await bot.setWebHook(fullWebhookUrl);
-    console.log("Webhook set to:", fullWebhookUrl);
-  } catch (err) {
-    console.error("Webhook error:", err);
-  }
-}
-
-initWebhook();
-
-/* ===============================
-   DATABASE (IN-MEMORY)
+   IN-MEMORY DB (REPLACE WITH SUPABASE LATER)
 =============================== */
 const users = new Map();
 
-function getOrCreateUser(tgUser) {
-  let user = users.get(tgUser.id);
-
-  if (!user) {
-    user = {
+function getUser(tgUser) {
+  if (!users.has(tgUser.id)) {
+    users.set(tgUser.id, {
       telegramId: tgUser.id,
       username: tgUser.username || "unknown",
       plan: "free",
       stripeSessionId: null,
-      createdAt: new Date()
-    };
-
-    users.set(tgUser.id, user);
+      createdAt: Date.now(),
+    });
   }
-
-  return user;
+  return users.get(tgUser.id);
 }
+
+const isPro = (user) => user.plan === "pro";
 
 /* ===============================
-   HELPERS
+   TELEGRAM COMMANDS
 =============================== */
-function isPro(user) {
-  return user.plan === "pro";
-}
+bot.setMyCommands([
+  { command: "start", description: "Start bot" },
+  { command: "profile", description: "View profile" },
+  { command: "plan", description: "View plan" },
+  { command: "upgrade", description: "Upgrade to PRO" },
+  { command: "help", description: "Help menu" },
+]);
+
+/* ===============================
+   START WEBHOOK
+=============================== */
+(async () => {
+  await bot.setWebHook(TELEGRAM_WEBHOOK_URL);
+  console.log("Telegram webhook set:", TELEGRAM_WEBHOOK_URL);
+})();
 
 /* ===============================
    COMMANDS
 =============================== */
 bot.onText(/\/start/, (msg) => {
-  const user = getOrCreateUser(msg.from);
+  const user = getUser(msg.from);
 
   bot.sendMessage(
     msg.chat.id,
@@ -115,11 +102,11 @@ Commands:
 });
 
 bot.onText(/\/profile/, (msg) => {
-  const user = getOrCreateUser(msg.from);
+  const user = getUser(msg.from);
 
   bot.sendMessage(
     msg.chat.id,
-    `Profile:
+    `Profile
 ID: ${user.telegramId}
 Username: ${user.username}
 Plan: ${user.plan}`
@@ -127,14 +114,14 @@ Plan: ${user.plan}`
 });
 
 bot.onText(/\/plan/, (msg) => {
-  const user = getOrCreateUser(msg.from);
+  const user = getUser(msg.from);
 
   bot.sendMessage(
     msg.chat.id,
     `Current Plan: ${user.plan}
 
 Free:
-- Basic features
+- Basic access
 
 PRO:
 - Full access`
@@ -142,10 +129,10 @@ PRO:
 });
 
 /* ===============================
-   STRIPE CHECKOUT (UPGRADE)
+   STRIPE CHECKOUT
 =============================== */
 bot.onText(/\/upgrade/, async (msg) => {
-  const user = getOrCreateUser(msg.from);
+  const user = getUser(msg.from);
 
   if (isPro(user)) {
     return bot.sendMessage(msg.chat.id, "You are already PRO.");
@@ -157,31 +144,31 @@ bot.onText(/\/upgrade/, async (msg) => {
       payment_method_types: ["card"],
       line_items: [
         {
-          price: process.env.STRIPE_PRICE_ID,
-          quantity: 1
-        }
+          price: STRIPE_PRICE_ID,
+          quantity: 1,
+        },
       ],
-      success_url: `${webhookUrl}/success`,
-      cancel_url: `${webhookUrl}/cancel`,
+      success_url: `${WEBHOOK_URL}/success`,
+      cancel_url: `${WEBHOOK_URL}/cancel`,
       metadata: {
-        telegramId: user.telegramId
-      }
+        telegramId: String(user.telegramId),
+      },
     });
 
     user.stripeSessionId = session.id;
 
     bot.sendMessage(
       msg.chat.id,
-      `Upgrade to PRO:\n${session.url}`
+      `Upgrade here:\n${session.url}`
     );
   } catch (err) {
     console.error("Stripe error:", err);
-    bot.sendMessage(msg.chat.id, "Payment error occurred.");
+    bot.sendMessage(msg.chat.id, "Payment error. Try again later.");
   }
 });
 
 /* ===============================
-   STRIPE WEBHOOK (AUTO UPGRADE)
+   STRIPE WEBHOOK
 =============================== */
 app.post("/stripe-webhook", (req, res) => {
   let event;
@@ -190,26 +177,24 @@ app.post("/stripe-webhook", (req, res) => {
     event = stripe.webhooks.constructEvent(
       req.body,
       req.headers["stripe-signature"],
-      process.env.STRIPE_WEBHOOK_SECRET
+      STRIPE_WEBHOOK_SECRET
     );
   } catch (err) {
-    console.error("Stripe webhook error:", err.message);
+    console.error("Stripe webhook failed:", err.message);
     return res.sendStatus(400);
   }
 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object;
-    const telegramId = session.metadata.telegramId;
+    const telegramId = Number(session.metadata.telegramId);
 
-    const user = Array.from(users.values()).find(
-      (u) => u.telegramId == telegramId
-    );
+    const user = users.get(telegramId);
 
     if (user) {
       user.plan = "pro";
 
       bot.sendMessage(
-        user.telegramId,
+        telegramId,
         "Payment successful. You are now PRO."
       );
     }
@@ -219,34 +204,9 @@ app.post("/stripe-webhook", (req, res) => {
 });
 
 /* ===============================
-   HELP
-=============================== */
-bot.onText(/\/help/, (msg) => {
-  bot.sendMessage(
-    msg.chat.id,
-    "Commands:\n/start\n/profile\n/plan\n/upgrade\n/help\n/ping"
-  );
-});
-
-/* ===============================
-   PING
-=============================== */
-bot.onText(/\/ping/, (msg) => {
-  bot.sendMessage(msg.chat.id, "Pong! Bot is alive.");
-});
-
-/* ===============================
-   MESSAGE LOGGER
-=============================== */
-bot.on("message", (msg) => {
-  if (!msg.text || msg.text.startsWith("/")) return;
-  console.log(`[USER ${msg.from.id}] ${msg.text}`);
-});
-
-/* ===============================
    TELEGRAM WEBHOOK ENDPOINT
 =============================== */
-app.post(webhookPath, (req, res) => {
+app.post(TELEGRAM_WEBHOOK_PATH, (req, res) => {
   try {
     bot.processUpdate(req.body);
     res.sendStatus(200);
@@ -260,10 +220,12 @@ app.post(webhookPath, (req, res) => {
    HEALTH CHECK
 =============================== */
 app.get("/health", (req, res) => {
+  const allUsers = Array.from(users.values());
+
   res.json({
     status: "ok",
-    users: users.size,
-    proUsers: Array.from(users.values()).filter(u => u.plan === "pro").length
+    totalUsers: allUsers.length,
+    proUsers: allUsers.filter((u) => u.plan === "pro").length,
   });
 });
 
