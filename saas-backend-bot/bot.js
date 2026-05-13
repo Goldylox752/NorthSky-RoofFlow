@@ -17,54 +17,63 @@ const {
 } = process.env;
 
 if (!TELEGRAM_BOT_TOKEN || !WEBHOOK_URL || !STRIPE_SECRET_KEY) {
-  console.error("Missing required environment variables");
-  process.exit(1);
+  throw new Error("Missing required environment variables");
 }
 
 /* ===============================
-   INIT SERVICES
+   INIT
 =============================== */
 const app = express();
+
 const stripe = new Stripe(STRIPE_SECRET_KEY, {
   apiVersion: "2025-04-30.basil",
   maxNetworkRetries: 2,
   timeout: 30000,
 });
 
-/* IMPORTANT: Stripe raw body must come first */
-app.use("/stripe-webhook", express.raw({ type: "application/json" }));
-app.use(express.json({ limit: "1mb" }));
-
 const bot = new TelegramBot(TELEGRAM_BOT_TOKEN);
 
 /* ===============================
-   WEBHOOK CONFIG
+   MIDDLEWARE
+=============================== */
+/* Stripe requires raw body */
+app.use("/stripe-webhook", express.raw({ type: "application/json" }));
+
+app.use(express.json({ limit: "1mb" }));
+
+/* ===============================
+   WEBHOOK PATHS
 =============================== */
 const TELEGRAM_WEBHOOK_PATH = "/telegram-webhook";
 const TELEGRAM_WEBHOOK_URL = `${WEBHOOK_URL}${TELEGRAM_WEBHOOK_PATH}`;
 
 /* ===============================
-   IN-MEMORY DB (REPLACE WITH SUPABASE LATER)
+   IN-MEMORY DB (replace with Supabase later)
 =============================== */
 const users = new Map();
 
 function getUser(tgUser) {
-  if (!users.has(tgUser.id)) {
-    users.set(tgUser.id, {
+  let user = users.get(tgUser.id);
+
+  if (!user) {
+    user = {
       telegramId: tgUser.id,
       username: tgUser.username || "unknown",
       plan: "free",
       stripeSessionId: null,
       createdAt: Date.now(),
-    });
+    };
+
+    users.set(tgUser.id, user);
   }
-  return users.get(tgUser.id);
+
+  return user;
 }
 
 const isPro = (user) => user.plan === "pro";
 
 /* ===============================
-   TELEGRAM COMMANDS
+   TELEGRAM COMMANDS MENU
 =============================== */
 bot.setMyCommands([
   { command: "start", description: "Start bot" },
@@ -75,11 +84,15 @@ bot.setMyCommands([
 ]);
 
 /* ===============================
-   START WEBHOOK
+   INIT TELEGRAM WEBHOOK
 =============================== */
 (async () => {
-  await bot.setWebHook(TELEGRAM_WEBHOOK_URL);
-  console.log("Telegram webhook set:", TELEGRAM_WEBHOOK_URL);
+  try {
+    await bot.setWebHook(TELEGRAM_WEBHOOK_URL);
+    console.log("Telegram webhook set:", TELEGRAM_WEBHOOK_URL);
+  } catch (err) {
+    console.error("Webhook setup failed:", err);
+  }
 })();
 
 /* ===============================
@@ -129,7 +142,7 @@ PRO:
 });
 
 /* ===============================
-   STRIPE CHECKOUT
+   STRIPE CHECKOUT (UPGRADE)
 =============================== */
 bot.onText(/\/upgrade/, async (msg) => {
   const user = getUser(msg.from);
@@ -159,7 +172,7 @@ bot.onText(/\/upgrade/, async (msg) => {
 
     bot.sendMessage(
       msg.chat.id,
-      `Upgrade here:\n${session.url}`
+      `Upgrade to PRO:\n${session.url}`
     );
   } catch (err) {
     console.error("Stripe error:", err);
@@ -180,7 +193,7 @@ app.post("/stripe-webhook", (req, res) => {
       STRIPE_WEBHOOK_SECRET
     );
   } catch (err) {
-    console.error("Stripe webhook failed:", err.message);
+    console.error("Stripe webhook error:", err.message);
     return res.sendStatus(400);
   }
 
