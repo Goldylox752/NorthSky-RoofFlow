@@ -1,20 +1,27 @@
 const { createClient } = require("@supabase/supabase-js");
 
 /* ===============================
-   SERVER SUPABASE CLIENT (IMPORTANT)
+   AUTH CLIENT (SAFE FOR JWT VERIFICATION)
 =============================== */
-const supabase = createClient(
+const supabaseAuth = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY // 🔥 IMPORTANT UPGRADE
+  process.env.SUPABASE_ANON_KEY
 );
 
 /* ===============================
-   AUTH MIDDLEWARE (SAAS READY)
+   ADMIN CLIENT (DB ACCESS)
+=============================== */
+const supabaseAdmin = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
+
+/* ===============================
+   AUTH MIDDLEWARE (PRODUCTION SAAS)
 =============================== */
 module.exports = async function auth(req, res, next) {
   try {
-    const authHeader = req.headers.authorization;
-    const token = authHeader?.replace("Bearer ", "").trim();
+    const token = req.headers.authorization?.replace("Bearer ", "").trim();
 
     if (!token) {
       return res.status(401).json({
@@ -24,9 +31,9 @@ module.exports = async function auth(req, res, next) {
     }
 
     /* ===============================
-       VERIFY USER TOKEN
+       VERIFY JWT (SUPABASE AUTH)
     =============================== */
-    const { data, error } = await supabase.auth.getUser(token);
+    const { data, error } = await supabaseAuth.auth.getUser(token);
 
     if (error || !data?.user) {
       return res.status(401).json({
@@ -38,20 +45,16 @@ module.exports = async function auth(req, res, next) {
     const user = data.user;
 
     /* ===============================
-       GET SAAS PROFILE
+       FETCH SAAS PROFILE (ADMIN CLIENT)
     =============================== */
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile } = await supabaseAdmin
       .from("users")
-      .select("stripe_customer_id, status, plan")
+      .select("plan, status, stripe_customer_id")
       .eq("auth_id", user.id)
       .maybeSingle();
 
-    if (profileError) {
-      console.error("Profile error:", profileError);
-    }
-
     /* ===============================
-       HARD BLOCK (SAAS RULE)
+       HARD FAIL SAFETY
     =============================== */
     if (!profile) {
       return res.status(403).json({
@@ -69,7 +72,7 @@ module.exports = async function auth(req, res, next) {
     }
 
     /* ===============================
-       ATTACH USER CONTEXT
+       ATTACH CONTEXT
     =============================== */
     req.user = {
       id: user.id,
@@ -82,7 +85,7 @@ module.exports = async function auth(req, res, next) {
       stripe_customer_id: profile.stripe_customer_id,
     };
 
-    return next();
+    next();
   } catch (err) {
     console.error("Auth error:", err);
 
