@@ -1,13 +1,13 @@
 const router = require("express").Router();
 const stripe = require("../lib/stripe");
-const auth = require("../middleware/auth.middleware");
+const auth = require("../../middleware/auth.middleware");
 
 /* ===============================
-   PRICES (SERVER-TRUSTED ONLY)
+   PRICES (IN CENTS - STRIPE SAFE)
 =============================== */
 const PRICES = {
-  starter: 100,
-  pro: 200,
+  starter: 10000, // $100.00
+  pro: 20000,     // $200.00
 };
 
 /* ===============================
@@ -15,10 +15,11 @@ const PRICES = {
 =============================== */
 router.post("/checkout", auth, async (req, res) => {
   try {
-    const user = req.user;
+    const { id, email } = req.user;
     const { plan = "starter" } = req.body;
 
     const amount = PRICES[plan];
+
     if (!amount) {
       return res.status(400).json({
         success: false,
@@ -28,8 +29,7 @@ router.post("/checkout", auth, async (req, res) => {
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
-
-      customer_email: user.email,
+      customer_email: email || undefined,
 
       payment_method_types: ["card"],
 
@@ -47,7 +47,7 @@ router.post("/checkout", auth, async (req, res) => {
       ],
 
       metadata: {
-        auth_id: user.id,
+        auth_id: id,
         plan,
       },
 
@@ -71,7 +71,7 @@ router.post("/checkout", auth, async (req, res) => {
 });
 
 /* ===============================
-   VERIFY (UI ONLY)
+   VERIFY PAYMENT (UI CHECK ONLY)
 =============================== */
 router.get("/verify", async (req, res) => {
   try {
@@ -100,7 +100,7 @@ router.get("/verify", async (req, res) => {
     return res.status(500).json({
       success: false,
       paid: false,
-      error: err.message,
+      error: err.message || "verify_failed",
     });
   }
 });
