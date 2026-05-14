@@ -1,53 +1,32 @@
-const { verifyToken } = require("@clerk/backend");
+// middleware/auth.js
+const { requireAuth } = require("@clerk/express");
 const logger = require("../lib/logger");
 
-const auth = async (req, res, next) => {
-  try {
-    const header = req.headers.authorization;
+// Clerk middleware (production safe)
+const auth = (req, res, next) => {
+  return requireAuth()(req, res, (err) => {
+    if (err) {
+      logger.warn(
+        {
+          error: err.message,
+          path: req.path,
+        },
+        "Clerk auth failed"
+      );
 
-    if (!header?.startsWith("Bearer ")) {
       return res.status(401).json({
         success: false,
-        error: "Missing authorization header",
+        error: "Unauthorized",
       });
     }
 
-    const token = header.split(" ")[1];
-
-    const payload = await verifyToken(token, {
-      secretKey: process.env.CLERK_SECRET_KEY,
-    });
-
-    if (!payload?.sub) {
-      return res.status(401).json({
-        success: false,
-        error: "Invalid session",
-      });
-    }
-
+    // Clerk injects auth into req.auth
     req.user = {
-      id: payload.sub,
-      email: payload.email,
-      role: payload.public_metadata?.role || "user",
-      plan: payload.public_metadata?.plan || "starter",
+      id: req.auth.userId,
     };
 
     next();
-  } catch (err) {
-    logger.warn(
-      {
-        error: err.message,
-        path: req.path,
-        ip: req.ip,
-      },
-      "Clerk auth failed"
-    );
-
-    return res.status(401).json({
-      success: false,
-      error: "Unauthorized",
-    });
-  }
+  });
 };
 
 module.exports = auth;
