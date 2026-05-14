@@ -5,16 +5,16 @@ const TelegramBot = require("node-telegram-bot-api");
 const Stripe = require("stripe");
 
 /* ===============================
-   ENV VALIDATION (FAIL FAST)
+   ENV VALIDATION
 =============================== */
-const requiredEnv = [
+const REQUIRED_ENV = [
   "TELEGRAM_BOT_TOKEN",
   "STRIPE_SECRET_KEY",
   "STRIPE_PRICE_ID",
   "CLIENT_URL",
 ];
 
-for (const key of requiredEnv) {
+for (const key of REQUIRED_ENV) {
   if (!process.env[key]) {
     throw new Error(`Missing env: ${key}`);
   }
@@ -30,7 +30,7 @@ const {
 } = process.env;
 
 /* ===============================
-   INIT SERVICES
+   APP INIT
 =============================== */
 const app = express();
 
@@ -49,11 +49,14 @@ app.use("/stripe-webhook", express.raw({ type: "application/json" }));
 app.use(express.json({ limit: "1mb" }));
 
 /* ===============================
-   MEMORY LAYER (swap to DB later)
+   IN-MEMORY STORE (MVP ONLY)
+   Replace with DB later (Supabase/Postgres)
 =============================== */
-const users = new Map();
-const timers = new Map();
-const state = new Map();
+const store = {
+  users: new Map(),
+  timers: new Map(),
+  state: new Map(),
+};
 
 /* ===============================
    USER SERVICE
@@ -61,8 +64,8 @@ const state = new Map();
 function getUser(tgUser) {
   const id = tgUser.id;
 
-  if (!users.has(id)) {
-    users.set(id, {
+  if (!store.users.has(id)) {
+    store.users.set(id, {
       id,
       username: tgUser.username || "unknown",
       plan: "free",
@@ -72,7 +75,7 @@ function getUser(tgUser) {
     });
   }
 
-  const user = users.get(id);
+  const user = store.users.get(id);
   user.lastActive = Date.now();
 
   return user;
@@ -81,21 +84,17 @@ function getUser(tgUser) {
 const isPro = (user) => user?.plan === "pro";
 
 /* ===============================
-   SAFE UTILITIES
+   HELPERS
 =============================== */
-function setState(id, value) {
-  state.set(id, value);
-}
+const setState = (id, value) => store.state.set(id, value);
 
-function clearTimer(id) {
-  const t = timers.get(id);
+const clearTimer = (id) => {
+  const t = store.timers.get(id);
   if (t) clearTimeout(t);
-  timers.delete(id);
-}
+  store.timers.delete(id);
+};
 
-function send(chatId, text) {
-  return bot.sendMessage(chatId, text);
-}
+const send = (chatId, text) => bot.sendMessage(chatId, text);
 
 /* ===============================
    SALES MESSAGE
@@ -126,7 +125,7 @@ ${CLIENT_URL}/checkout?plan=pro
 }
 
 /* ===============================
-   TELEGRAM COMMANDS
+   BOT COMMANDS
 =============================== */
 bot.setMyCommands([
   { command: "start", description: "Start bot" },
@@ -147,27 +146,27 @@ bot.onText(/\/start/, (msg) => {
 
   clearTimer(user.id);
 
-  timers.set(
+  store.timers.set(
     user.id,
     setTimeout(() => {
-      const latest = users.get(user.id);
+      const latest = store.users.get(user.id);
       if (!isPro(latest)) {
         send(
           msg.chat.id,
-          "Quick question: want faster access and higher priority results?"
+          "Quick question: want faster access and priority results?"
         );
       }
     }, 30000)
   );
 
-  timers.set(
+  store.timers.set(
     user.id,
     setTimeout(() => {
-      const latest = users.get(user.id);
+      const latest = store.users.get(user.id);
       if (!isPro(latest)) {
         send(
           msg.chat.id,
-          `Still available upgrade:\n${CLIENT_URL}/checkout?plan=pro`
+          `Still available:\n${CLIENT_URL}/checkout?plan=pro`
         );
       }
     }, 180000)
@@ -208,7 +207,7 @@ Plan: ${user.plan}`
 });
 
 /* ===============================
-   UPGRADE (STRIPE)
+   UPGRADE (STRIPE CHECKOUT)
 =============================== */
 bot.onText(/\/upgrade/, async (msg) => {
   const user = getUser(msg.from);
@@ -239,10 +238,10 @@ bot.onText(/\/upgrade/, async (msg) => {
 
     clearTimer(user.id);
 
-    timers.set(
+    store.timers.set(
       user.id,
       setTimeout(() => {
-        const latest = users.get(user.id);
+        const latest = store.users.get(user.id);
         if (!isPro(latest)) {
           send(msg.chat.id, `Reminder:\n${session.url}`);
         }
@@ -268,7 +267,7 @@ app.post("/stripe-webhook", (req, res) => {
       req.headers["stripe-signature"],
       STRIPE_WEBHOOK_SECRET
     );
-  } catch (err) {
+  } catch {
     return res.sendStatus(400);
   }
 
@@ -276,7 +275,7 @@ app.post("/stripe-webhook", (req, res) => {
     const session = event.data.object;
     const userId = Number(session.metadata.telegramId);
 
-    const user = users.get(userId);
+    const user = store.users.get(userId);
 
     if (user) {
       user.plan = "pro";
@@ -308,12 +307,12 @@ app.post("/telegram-webhook", (req, res) => {
    HEALTH CHECK
 =============================== */
 app.get("/health", (req, res) => {
-  const list = Array.from(users.values());
+  const users = Array.from(store.users.values());
 
   res.json({
     status: "ok",
-    totalUsers: list.length,
-    proUsers: list.filter((u) => u.plan === "pro").length,
+    totalUsers: users.length,
+    proUsers: users.filter((u) => u.plan === "pro").length,
     uptime: process.uptime(),
   });
 });
