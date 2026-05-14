@@ -1,5 +1,6 @@
 const express = require("express");
 const Stripe = require("stripe");
+
 const { lockLeadPrice } = require("../lib/lockLeadPrice");
 
 const router = express.Router();
@@ -7,7 +8,10 @@ const router = express.Router();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 /* ===============================
-   CHARGE FOR LEAD
+   CHARGE LEAD
+   - PRICE IS LOCKED SERVER-SIDE
+   - STRIPE PAYMENT INTENT CREATED
+   - METADATA USED FOR WEBHOOK RECONCILIATION
 =============================== */
 router.post("/charge-lead", async (req, res) => {
   try {
@@ -16,13 +20,21 @@ router.post("/charge-lead", async (req, res) => {
     if (!lead || !contractor) {
       return res.status(400).json({
         success: false,
-        error: "Missing lead or contractor",
+        error: "missing_required_fields",
       });
     }
 
-    /* ===============================
-       1. LOCK PRICE (YOUR ENGINE)
-    =============================== */
+    if (!lead.id || !contractor.id) {
+      return res.status(400).json({
+        success: false,
+        error: "invalid_lead_or_contractor",
+      });
+    }
+
+    /*
+      1. LOCK PRICE (business logic layer)
+      Ensures pricing cannot be manipulated from client side
+    */
     const priceData = lockLeadPrice({
       lead,
       contractor,
@@ -30,18 +42,30 @@ router.post("/charge-lead", async (req, res) => {
       systemMetrics,
     });
 
-    const amount = priceData.finalPrice;
+    if (!priceData || typeof priceData.finalPrice !== "number") {
+      return res.status(500).json({
+        success: false,
+        error: "price_calculation_failed",
+      });
+    }
 
-    /* ===============================
-       2. CREATE STRIPE PAYMENT INTENT
-    =============================== */
+    const amount = Math.round(priceData.finalPrice);
+
+    /*
+      2. CREATE STRIPE PAYMENT INTENT
+      - amount must be integer (cents)
+      - metadata used for webhook reconciliation
+    */
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: amount * 100, // cents
+      amount: amount * 100,
       currency: "usd",
+      automatic_payment_methods: {
+        enabled: true,
+      },
       metadata: {
-        leadId: lead.id,
-        contractorId: contractor.id,
-        price: amount,
+        leadId: String(lead.id),
+        contractorId: String(contractor.id),
+        price: String(amount),
       },
     });
 
@@ -51,12 +75,13 @@ router.post("/charge-lead", async (req, res) => {
       amount,
       leadId: lead.id,
     });
+
   } catch (err) {
-    console.error("Stripe charge error:", err);
+    console.error("Stripe charge-lead error:", err);
 
     return res.status(500).json({
       success: false,
-      error: "Payment failed",
+      error: "payment_intent_failed",
     });
   }
 });
