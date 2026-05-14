@@ -5,11 +5,10 @@ const TelegramBot = require("node-telegram-bot-api");
 const Stripe = require("stripe");
 
 /* ===============================
-   ENV VALIDATION
+   ENV VALIDATION (FAIL FAST)
 =============================== */
 const requiredEnv = [
   "TELEGRAM_BOT_TOKEN",
-  "WEBHOOK_URL",
   "STRIPE_SECRET_KEY",
   "STRIPE_PRICE_ID",
   "CLIENT_URL",
@@ -23,7 +22,6 @@ for (const key of requiredEnv) {
 
 const {
   TELEGRAM_BOT_TOKEN,
-  WEBHOOK_URL,
   STRIPE_SECRET_KEY,
   STRIPE_PRICE_ID,
   STRIPE_WEBHOOK_SECRET,
@@ -38,7 +36,7 @@ const app = express();
 
 const stripe = new Stripe(STRIPE_SECRET_KEY, {
   apiVersion: "2025-04-30.basil",
-  maxNetworkRetries: 2,
+  maxNetworkRetries: 3,
   timeout: 30000,
 });
 
@@ -51,14 +49,14 @@ app.use("/stripe-webhook", express.raw({ type: "application/json" }));
 app.use(express.json({ limit: "1mb" }));
 
 /* ===============================
-   MEMORY STORE (replace with DB later)
+   MEMORY LAYER (swap to DB later)
 =============================== */
 const users = new Map();
 const timers = new Map();
 const state = new Map();
 
 /* ===============================
-   USER SYSTEM
+   USER SERVICE
 =============================== */
 function getUser(tgUser) {
   const id = tgUser.id;
@@ -80,96 +78,96 @@ function getUser(tgUser) {
   return user;
 }
 
-const isPro = (user) => user.plan === "pro";
+const isPro = (user) => user?.plan === "pro";
 
 /* ===============================
-   HELPERS
+   SAFE UTILITIES
 =============================== */
-const setState = (id, value) => state.set(id, value);
+function setState(id, value) {
+  state.set(id, value);
+}
 
-const clearTimer = (id) => {
+function clearTimer(id) {
   const t = timers.get(id);
   if (t) clearTimeout(t);
-};
+  timers.delete(id);
+}
+
+function send(chatId, text) {
+  return bot.sendMessage(chatId, text);
+}
 
 /* ===============================
-   SALES MESSAGE (OPTIMIZED CONVERSION)
+   SALES MESSAGE
 =============================== */
 function salesMessage(user) {
   return `
-🔥 ACCESS READY
+ACCESS READY
 
 Hi @${user.username}
 
-You're currently on the FREE plan.
+Current plan: FREE
 
-━━━━━━━━━━━━━━
 FREE:
-• Limited access
-• Lower priority
-• Slower results
-━━━━━━━━━━━━━━
+- Limited access
+- Lower priority
+- Slower processing
 
-💎 PRO — $19/month
+PRO — $19/month
 
-UNLOCK:
-⚡ Priority access
-🎯 Better results first
-🚀 Faster processing
-📈 More opportunities
+UPGRADES:
+- Priority access
+- Faster results
+- Higher success rate
 
-━━━━━━━━━━━━━━
-WHY USERS UPGRADE:
-They want faster results before others.
-
-👉 Upgrade here:
+Upgrade:
 ${CLIENT_URL}/checkout?plan=pro
 `;
 }
 
 /* ===============================
-   TELEGRAM MENU
+   TELEGRAM COMMANDS
 =============================== */
 bot.setMyCommands([
   { command: "start", description: "Start bot" },
   { command: "plan", description: "View plan" },
   { command: "profile", description: "Profile" },
-  { command: "upgrade", description: "Upgrade to PRO" },
+  { command: "upgrade", description: "Upgrade" },
 ]);
 
 /* ===============================
-   START FLOW + FOLLOW UPS
+   START FLOW
 =============================== */
 bot.onText(/\/start/, (msg) => {
   const user = getUser(msg.from);
 
   setState(user.id, "started");
 
-  bot.sendMessage(msg.chat.id, salesMessage(user));
+  send(msg.chat.id, salesMessage(user));
 
   clearTimer(user.id);
 
-  /* FOLLOW UP 1 (30s) */
   timers.set(
     user.id,
     setTimeout(() => {
-      if (!isPro(user)) {
-        bot.sendMessage(
-          user.id,
-          "👀 Quick question:\n\nWant to see why PRO users get better results?"
+      const latest = users.get(user.id);
+      if (!isPro(latest)) {
+        send(
+          msg.chat.id,
+          "Quick question: want faster access and higher priority results?"
         );
       }
     }, 30000)
   );
 
-  /* FOLLOW UP 2 (3 min) */
   timers.set(
     user.id,
     setTimeout(() => {
-      if (!isPro(user)) {
-        bot.sendMessage(
-          user.id,
-          `Still thinking?\n\nMost users upgrade to avoid missing opportunities.\n\n👉 ${CLIENT_URL}/checkout?plan=pro`
+      const latest = users.get(user.id);
+      if (!isPro(latest)) {
+        send(
+          msg.chat.id,
+          `Still available upgrade:\n${CLIENT_URL}/checkout?plan=pro`
         );
       }
     }, 180000)
@@ -182,16 +180,15 @@ bot.onText(/\/start/, (msg) => {
 bot.onText(/\/plan/, (msg) => {
   const user = getUser(msg.from);
 
-  bot.sendMessage(
+  send(
     msg.chat.id,
-`PLAN STATUS: ${user.plan.toUpperCase()}
+    `PLAN: ${user.plan.toUpperCase()}
 
 FREE:
-• Basic access
+- Basic access
 
 PRO:
-• Priority access
-• Faster results`
+- Priority processing`
   );
 });
 
@@ -201,9 +198,9 @@ PRO:
 bot.onText(/\/profile/, (msg) => {
   const user = getUser(msg.from);
 
-  bot.sendMessage(
+  send(
     msg.chat.id,
-`PROFILE
+    `PROFILE
 ID: ${user.id}
 Username: ${user.username}
 Plan: ${user.plan}`
@@ -211,13 +208,13 @@ Plan: ${user.plan}`
 });
 
 /* ===============================
-   STRIPE CHECKOUT
+   UPGRADE (STRIPE)
 =============================== */
 bot.onText(/\/upgrade/, async (msg) => {
   const user = getUser(msg.from);
 
   if (isPro(user)) {
-    return bot.sendMessage(msg.chat.id, "You already have PRO access.");
+    return send(msg.chat.id, "Already on PRO");
   }
 
   setState(user.id, "checkout_started");
@@ -238,26 +235,22 @@ bot.onText(/\/upgrade/, async (msg) => {
 
     user.stripeSessionId = session.id;
 
-    bot.sendMessage(msg.chat.id, `💳 Complete payment:\n\n${session.url}`);
+    send(msg.chat.id, `Payment link:\n${session.url}`);
 
     clearTimer(user.id);
 
-    /* ABANDONMENT FOLLOW-UP (10 min) */
     timers.set(
       user.id,
       setTimeout(() => {
-        if (!isPro(user)) {
-          bot.sendMessage(
-            user.id,
-            `⏳ Your PRO access is still waiting.\n\n👉 ${session.url}`
-          );
+        const latest = users.get(user.id);
+        if (!isPro(latest)) {
+          send(msg.chat.id, `Reminder:\n${session.url}`);
         }
       }, 600000)
     );
-
   } catch (err) {
     console.error("Stripe error:", err);
-    bot.sendMessage(msg.chat.id, "Payment error. Try again later.");
+    send(msg.chat.id, "Payment error occurred");
   }
 });
 
@@ -265,6 +258,8 @@ bot.onText(/\/upgrade/, async (msg) => {
    STRIPE WEBHOOK
 =============================== */
 app.post("/stripe-webhook", (req, res) => {
+  if (!STRIPE_WEBHOOK_SECRET) return res.sendStatus(500);
+
   let event;
 
   try {
@@ -289,10 +284,7 @@ app.post("/stripe-webhook", (req, res) => {
 
       clearTimer(userId);
 
-      bot.sendMessage(
-        userId,
-        "🎉 Payment confirmed — PRO activated instantly."
-      );
+      send(userId, "Payment confirmed. PRO activated.");
     }
   }
 
@@ -316,12 +308,13 @@ app.post("/telegram-webhook", (req, res) => {
    HEALTH CHECK
 =============================== */
 app.get("/health", (req, res) => {
-  const all = Array.from(users.values());
+  const list = Array.from(users.values());
 
   res.json({
     status: "ok",
-    users: all.length,
-    proUsers: all.filter((u) => u.plan === "pro").length,
+    totalUsers: list.length,
+    proUsers: list.filter((u) => u.plan === "pro").length,
+    uptime: process.uptime(),
   });
 });
 
