@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 import {
   Area,
   AreaChart,
@@ -22,7 +23,7 @@ import { Card } from "@/components/ui/card";
 const TELEGRAM_BOT = "https://t.me/YOUR_BOT_USERNAME";
 
 /* ===============================
-   CHART DATA
+   DATA
 =============================== */
 const revenueData = [
   { month: "Jan", revenue: 12000 },
@@ -42,6 +43,23 @@ const leadData = [
   { name: "Sun", leads: 340 },
 ];
 
+/* ===============================
+   ANIMATION VARIANTS
+=============================== */
+const fadeUp = {
+  hidden: { opacity: 0, y: 20 },
+  show: { opacity: 1, y: 0 },
+};
+
+const stagger = {
+  hidden: {},
+  show: {
+    transition: {
+      staggerChildren: 0.08,
+    },
+  },
+};
+
 export default function HomePage() {
   const router = useRouter();
 
@@ -51,30 +69,35 @@ export default function HomePage() {
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-black text-white">
-      {/* GLOBAL LIGHTING */}
-      <div className="absolute inset-0 -z-50 bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.25),transparent_35%),radial-gradient(circle_at_bottom_right,rgba(168,85,247,0.18),transparent_30%)]" />
 
-      <div className="absolute inset-0 -z-40 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.02),transparent)]" />
+      {/* LIGHTING */}
+      <div className="absolute inset-0 -z-50 bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.25),transparent_40%),radial-gradient(circle_at_bottom_right,rgba(168,85,247,0.18),transparent_35%)]" />
 
+      {/* NAV */}
       <Navbar />
 
+      {/* HERO */}
       <Hero go={go} />
 
+      {/* STATS */}
       <Stats />
 
-      <AnalyticsPreview />
+      {/* ANALYTICS */}
+      <Analytics />
 
+      {/* FEATURES */}
       <Features />
 
+      {/* PRICING */}
       <Pricing go={go} />
 
-      <OperationsPanel />
+      {/* OPS */}
+      <Operations />
 
+      {/* CTA */}
       <CTA go={go} />
 
       <Footer />
-
-      <TelegramFloat />
     </main>
   );
 }
@@ -84,48 +107,31 @@ export default function HomePage() {
 =============================== */
 function Navbar() {
   return (
-    <header className="sticky top-0 z-50 border-b border-white/10 bg-black/40 backdrop-blur-2xl">
+    <motion.header
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      className="sticky top-0 z-50 border-b border-white/10 bg-black/40 backdrop-blur-2xl"
+    >
       <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">
-            NorthSky
-          </h1>
-
-          <p className="text-xs text-zinc-400">
-            Automation Infrastructure
-          </p>
+          <h1 className="text-xl font-semibold">NorthSky</h1>
+          <p className="text-xs text-zinc-400">Automation Infrastructure</p>
         </div>
 
-        <nav className="hidden items-center gap-8 md:flex">
-          <a
-            href="#features"
-            className="text-sm text-zinc-400 transition hover:text-white"
-          >
+        <div className="hidden items-center gap-6 md:flex">
+          <a href="#features" className="text-sm text-zinc-400 hover:text-white">
             Features
           </a>
-
-          <a
-            href="#pricing"
-            className="text-sm text-zinc-400 transition hover:text-white"
-          >
+          <a href="#pricing" className="text-sm text-zinc-400 hover:text-white">
             Pricing
           </a>
 
           <a href={TELEGRAM_BOT} target="_blank">
-            <Button
-              variant="outline"
-              className="border-white/20 bg-white/5 backdrop-blur-xl"
-            >
-              Telegram Bot
-            </Button>
+            <Button variant="outline">Telegram</Button>
           </a>
-
-          <Button className="bg-white text-black hover:bg-zinc-200">
-            Dashboard
-          </Button>
-        </nav>
+        </div>
       </div>
-    </header>
+    </motion.header>
   );
 }
 
@@ -134,130 +140,50 @@ function Navbar() {
 =============================== */
 function Hero({ go }: any) {
   return (
-    <section className="relative">
-      <div className="mx-auto grid max-w-7xl items-center gap-20 px-6 py-32 md:grid-cols-2">
-        <div>
-          <div className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs text-zinc-300 backdrop-blur-xl">
-            Telegram + Stripe + SaaS Automation
-          </div>
-
-          <h1 className="mt-8 text-6xl font-semibold leading-tight tracking-tight md:text-7xl">
-            Operate your
-            <span className="bg-gradient-to-r from-indigo-400 to-violet-400 bg-clip-text text-transparent">
-              {" "}
-              automation SaaS
-            </span>
-            <br />
-            from one platform
-          </h1>
-
-          <p className="mt-8 max-w-xl text-lg leading-8 text-zinc-400">
-            Production-ready infrastructure for lead routing, Stripe billing,
-            Telegram automation, analytics, and real-time operations.
-          </p>
-
-          <div className="mt-10 flex flex-wrap gap-4">
-            <Button
-              size="lg"
-              onClick={() => go("growth")}
-              className="bg-white text-black hover:bg-zinc-200"
-            >
-              Launch Platform
-            </Button>
-
-            <a href={TELEGRAM_BOT} target="_blank">
-              <Button
-                size="lg"
-                variant="outline"
-                className="border-white/20 bg-white/5 backdrop-blur-xl"
-              >
-                Open Telegram Bot
-              </Button>
-            </a>
-          </div>
-
-          <div className="mt-12 flex gap-10">
-            <StatMini value="99.9%" label="Uptime" />
-            <StatMini value="24/7" label="Automation" />
-            <StatMini value="$1.2M+" label="Tracked Revenue" />
-          </div>
+    <motion.section
+      initial="hidden"
+      animate="show"
+      variants={stagger}
+      className="mx-auto grid max-w-7xl gap-16 px-6 py-28 md:grid-cols-2"
+    >
+      <motion.div variants={fadeUp}>
+        <div className="inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs text-zinc-300">
+          SaaS + Telegram Automation
         </div>
 
-        {/* HERO GLASS PANEL */}
-        <div className="relative">
-          <div className="absolute -inset-10 rounded-full bg-indigo-500/20 blur-3xl" />
+        <h1 className="mt-8 text-6xl font-semibold leading-tight">
+          Operate your
+          <span className="text-indigo-400"> automation SaaS</span>
+        </h1>
 
-          <Card className="relative overflow-hidden border border-white/10 bg-white/5 p-8 shadow-[0_0_80px_rgba(99,102,241,0.15)] backdrop-blur-2xl">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-medium">
-                  Operations Dashboard
-                </h3>
+        <p className="mt-6 text-zinc-400">
+          Stripe billing, Telegram bots, lead routing, and analytics — unified.
+        </p>
 
-                <p className="text-sm text-zinc-400">
-                  Live infrastructure overview
-                </p>
-              </div>
-
-              <div className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-400">
-                LIVE
-              </div>
-            </div>
-
-            <div className="mt-10 grid gap-4">
-              <Metric title="Monthly Revenue" value="$48,220" />
-              <Metric title="Telegram Automations" value="1,248" />
-              <Metric title="Lead Conversion" value="24.8%" />
-              <Metric title="Webhook Health" value="Operational" />
-            </div>
-
-            <div className="mt-10 h-[260px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={revenueData}>
-                  <defs>
-                    <linearGradient
-                      id="colorRevenue"
-                      x1="0"
-                      y1="0"
-                      x2="0"
-                      y2="1"
-                    >
-                      <stop offset="5%" stopColor="#818cf8" stopOpacity={0.8} />
-                      <stop offset="95%" stopColor="#818cf8" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-
-                  <CartesianGrid stroke="rgba(255,255,255,0.05)" />
-
-                  <XAxis
-                    dataKey="month"
-                    stroke="#71717a"
-                    tickLine={false}
-                    axisLine={false}
-                  />
-
-                  <YAxis
-                    stroke="#71717a"
-                    tickLine={false}
-                    axisLine={false}
-                  />
-
-                  <Tooltip />
-
-                  <Area
-                    type="monotone"
-                    dataKey="revenue"
-                    stroke="#818cf8"
-                    fillOpacity={1}
-                    fill="url(#colorRevenue)"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </Card>
+        <div className="mt-10 flex gap-4">
+          <Button onClick={() => go("growth")}>Launch</Button>
+          <a href={TELEGRAM_BOT} target="_blank">
+            <Button variant="outline">Telegram</Button>
+          </a>
         </div>
-      </div>
-    </section>
+      </motion.div>
+
+      {/* GLASS PANEL */}
+      <motion.div variants={fadeUp}>
+        <Card className="border border-white/10 bg-white/5 p-6 backdrop-blur-2xl shadow-[0_0_80px_rgba(99,102,241,0.15)]">
+
+          <h3 className="text-lg font-medium">Live Dashboard</h3>
+          <p className="text-sm text-zinc-400">Real-time system</p>
+
+          <div className="mt-6 space-y-3">
+            <Metric title="Revenue" value="$48,220" />
+            <Metric title="Leads" value="1,248" />
+            <Metric title="Conversion" value="24.8%" />
+          </div>
+
+        </Card>
+      </motion.div>
+    </motion.section>
   );
 }
 
@@ -266,172 +192,88 @@ function Hero({ go }: any) {
 =============================== */
 function Stats() {
   return (
-    <section className="border-y border-white/10 bg-white/[0.02] backdrop-blur-xl">
-      <div className="mx-auto grid max-w-7xl grid-cols-2 gap-10 px-6 py-16 text-center md:grid-cols-4">
-        <Stat value="12k+" label="Leads Processed" />
-        <Stat value="$1.2M+" label="Revenue Tracked" />
-        <Stat value="99.9%" label="Webhook Success" />
-        <Stat value="24/7" label="Bot Automation" />
+    <motion.section
+      initial="hidden"
+      whileInView="show"
+      viewport={{ once: true }}
+      variants={stagger}
+      className="border-y border-white/10 bg-white/[0.02]"
+    >
+      <div className="mx-auto grid max-w-7xl grid-cols-2 gap-10 px-6 py-16 md:grid-cols-4">
+        {[
+          ["12k+", "Leads"],
+          ["$1.2M+", "Revenue"],
+          ["99.9%", "Uptime"],
+          ["24/7", "Automation"],
+        ].map(([v, l]) => (
+          <motion.div key={l} variants={fadeUp}>
+            <div className="text-4xl font-semibold">{v}</div>
+            <div className="text-sm text-zinc-400">{l}</div>
+          </motion.div>
+        ))}
       </div>
-    </section>
+    </motion.section>
   );
 }
 
 /* ===============================
-   ANALYTICS PREVIEW
+   ANALYTICS
 =============================== */
-function AnalyticsPreview() {
+function Analytics() {
   return (
     <section className="mx-auto max-w-7xl px-6 py-28">
-      <div className="mb-12">
-        <h2 className="text-4xl font-semibold">
-          Real-time analytics
-        </h2>
 
-        <p className="mt-4 max-w-2xl text-zinc-400">
-          Monitor revenue growth, lead activity, Stripe events, and Telegram
-          automation in one operational dashboard.
-        </p>
-      </div>
+      <h2 className="text-4xl font-semibold">Analytics</h2>
+      <p className="mt-3 text-zinc-400">Live revenue + lead tracking</p>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* REVENUE CHART */}
-        <Card className="border border-white/10 bg-white/5 p-8 backdrop-blur-2xl">
-          <div className="mb-6">
-            <h3 className="text-lg font-medium">
-              Revenue Growth
-            </h3>
+      <div className="mt-10 grid gap-6 md:grid-cols-2">
 
-            <p className="text-sm text-zinc-400">
-              Monthly Stripe revenue
-            </p>
-          </div>
-
-          <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={revenueData}>
-                <CartesianGrid stroke="rgba(255,255,255,0.05)" />
-
-                <XAxis
-                  dataKey="month"
-                  stroke="#71717a"
-                  tickLine={false}
-                  axisLine={false}
-                />
-
-                <YAxis
-                  stroke="#71717a"
-                  tickLine={false}
-                  axisLine={false}
-                />
-
-                <Tooltip />
-
-                <Area
-                  type="monotone"
-                  dataKey="revenue"
-                  stroke="#8b5cf6"
-                  fill="#8b5cf6"
-                  fillOpacity={0.2}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+        <Card className="bg-white/5 p-6 backdrop-blur-2xl border border-white/10">
+          <h3>Revenue</h3>
+          <Chart type="area" dataKey="revenue" />
         </Card>
 
-        {/* LEADS CHART */}
-        <Card className="border border-white/10 bg-white/5 p-8 backdrop-blur-2xl">
-          <div className="mb-6">
-            <h3 className="text-lg font-medium">
-              Lead Activity
-            </h3>
-
-            <p className="text-sm text-zinc-400">
-              Daily processed leads
-            </p>
-          </div>
-
-          <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={leadData}>
-                <CartesianGrid stroke="rgba(255,255,255,0.05)" />
-
-                <XAxis
-                  dataKey="name"
-                  stroke="#71717a"
-                  tickLine={false}
-                  axisLine={false}
-                />
-
-                <YAxis
-                  stroke="#71717a"
-                  tickLine={false}
-                  axisLine={false}
-                />
-
-                <Tooltip />
-
-                <Bar
-                  dataKey="leads"
-                  fill="#6366f1"
-                  radius={[8, 8, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+        <Card className="bg-white/5 p-6 backdrop-blur-2xl border border-white/10">
+          <h3>Leads</h3>
+          <Chart type="bar" dataKey="leads" />
         </Card>
+
       </div>
     </section>
   );
 }
 
 /* ===============================
-   FEATURES
+   FEATURES (REAL MOTION GRID)
 =============================== */
 function Features() {
   const items = [
-    "Telegram Automation",
-    "Stripe Billing Engine",
-    "Lead Routing",
-    "Webhook Infrastructure",
-    "Real-time Analytics",
-    "Enterprise SaaS Backend",
+    "Telegram Bot System",
+    "Stripe Automation",
+    "Lead Engine",
+    "Webhook Layer",
+    "Analytics Core",
+    "SaaS Backend",
   ];
 
   return (
-    <section
-      id="features"
+    <motion.section
+      initial="hidden"
+      whileInView="show"
+      viewport={{ once: true }}
+      variants={stagger}
       className="mx-auto max-w-7xl px-6 py-28"
     >
-      <div className="text-center">
-        <h2 className="text-4xl font-semibold">
-          Enterprise automation stack
-        </h2>
-
-        <p className="mx-auto mt-5 max-w-2xl text-zinc-400">
-          Designed for scalable lead systems, SaaS infrastructure,
-          and Telegram automation platforms.
-        </p>
-      </div>
-
-      <div className="mt-16 grid gap-6 md:grid-cols-3">
-        {items.map((item) => (
-          <Card
-            key={item}
-            className="group border border-white/10 bg-white/5 p-8 backdrop-blur-2xl transition hover:border-indigo-500/40 hover:bg-white/[0.07]"
-          >
-            <div className="text-lg font-medium">
-              {item}
-            </div>
-
-            <p className="mt-4 text-sm leading-7 text-zinc-400">
-              Production-ready infrastructure with scalable architecture and
-              operational visibility.
-            </p>
-          </Card>
+      <div className="grid gap-6 md:grid-cols-3">
+        {items.map((i) => (
+          <motion.div key={i} variants={fadeUp} whileHover={{ scale: 1.03 }}>
+            <Card className="border border-white/10 bg-white/5 p-6 backdrop-blur-2xl hover:shadow-[0_0_40px_rgba(99,102,241,0.15)]">
+              {i}
+            </Card>
+          </motion.div>
         ))}
       </div>
-    </section>
+    </motion.section>
   );
 }
 
@@ -439,93 +281,37 @@ function Features() {
    PRICING
 =============================== */
 function Pricing({ go }: any) {
-  const plans = [
-    { title: "Starter", price: "$9" },
-    { title: "Growth", price: "$29" },
-    { title: "Enterprise", price: "$79" },
-  ];
-
   return (
-    <section
-      id="pricing"
-      className="mx-auto max-w-7xl px-6 py-28"
-    >
-      <div className="text-center">
-        <h2 className="text-4xl font-semibold">
-          Pricing
-        </h2>
+    <section className="mx-auto max-w-7xl px-6 py-28">
+      <div className="grid gap-6 md:grid-cols-3">
 
-        <p className="mt-4 text-zinc-400">
-          Flexible plans for automation businesses.
-        </p>
-      </div>
-
-      <div className="mt-16 grid gap-8 md:grid-cols-3">
-        {plans.map((plan) => (
-          <Card
-            key={plan.title}
-            className="relative overflow-hidden border border-white/10 bg-white/5 p-8 backdrop-blur-2xl"
-          >
-            <div className="absolute inset-0 bg-gradient-to-b from-white/[0.04] to-transparent" />
-
-            <div className="relative">
-              <div className="text-xl font-medium">
-                {plan.title}
-              </div>
-
-              <div className="mt-6 text-5xl font-semibold">
-                {plan.price}
-                <span className="text-lg text-zinc-400">
-                  /mo
-                </span>
-              </div>
-
-              <div className="mt-8 space-y-3 text-sm text-zinc-400">
-                <div>✓ Telegram automation</div>
-                <div>✓ Stripe subscriptions</div>
-                <div>✓ Live dashboard</div>
-                <div>✓ Analytics engine</div>
-              </div>
-
-              <Button
-                className="mt-10 w-full bg-white text-black hover:bg-zinc-200"
-                onClick={() => go(plan.title.toLowerCase())}
-              >
-                Start {plan.title}
-              </Button>
-            </div>
+        {["Starter", "Growth", "Elite"].map((p) => (
+          <Card key={p} className="bg-white/5 p-6 border border-white/10 backdrop-blur-2xl">
+            <h3>{p}</h3>
+            <Button className="mt-6 w-full" onClick={() => go(p.toLowerCase())}>
+              Upgrade
+            </Button>
           </Card>
         ))}
+
       </div>
     </section>
   );
 }
 
 /* ===============================
-   OPERATIONS PANEL
+   OPS
 =============================== */
-function OperationsPanel() {
+function Operations() {
   return (
     <section className="mx-auto max-w-7xl px-6 py-28">
-      <Card className="overflow-hidden border border-white/10 bg-white/5 p-10 backdrop-blur-2xl">
-        <div className="flex flex-col justify-between gap-10 md:flex-row">
-          <div>
-            <h2 className="text-4xl font-semibold">
-              Infrastructure Status
-            </h2>
+      <Card className="bg-white/5 p-8 border border-white/10 backdrop-blur-2xl">
+        <h2>System Status</h2>
 
-            <p className="mt-5 max-w-xl text-zinc-400">
-              Monitor Stripe billing, webhook processing,
-              Telegram automations, and operational uptime.
-            </p>
-          </div>
-
-          <div className="grid gap-4">
-            <Status label="Stripe API" value="Operational" />
-            <Status label="Telegram Bot" value="Connected" />
-            <Status label="Webhook Queue" value="Healthy" />
-            <Status label="Analytics Engine" value="Online" />
-          </div>
+        <div className="mt-6 space-y-3">
+          <Status label="Stripe" value="OK" />
+          <Status label="Telegram" value="OK" />
+          <Status label="Webhooks" value="OK" />
         </div>
       </Card>
     </section>
@@ -537,107 +323,72 @@ function OperationsPanel() {
 =============================== */
 function CTA({ go }: any) {
   return (
-    <section className="px-6 py-32 text-center">
-      <h2 className="text-6xl font-semibold tracking-tight">
-        Launch your automation infrastructure
-      </h2>
+    <section className="text-center py-28">
+      <h2 className="text-5xl font-semibold">Launch your system</h2>
 
-      <p className="mx-auto mt-6 max-w-3xl text-lg leading-8 text-zinc-400">
-        Build a scalable SaaS platform with Stripe billing,
-        Telegram automation, analytics, and production-ready architecture.
-      </p>
-
-      <Button
-        size="lg"
-        className="mt-10 bg-white px-10 text-black hover:bg-zinc-200"
-        onClick={() => go("growth")}
-      >
-        Start Building
+      <Button className="mt-8" onClick={() => go("growth")}>
+        Start
       </Button>
     </section>
   );
 }
 
 /* ===============================
-   FLOATING TELEGRAM BUTTON
+   FOOTER
 =============================== */
-function TelegramFloat() {
+function Footer() {
   return (
-    <a
-      href={TELEGRAM_BOT}
-      target="_blank"
-      className="fixed bottom-6 right-6 z-50"
-    >
-      <Button className="border border-white/10 bg-white/10 shadow-[0_0_40px_rgba(99,102,241,0.35)] backdrop-blur-2xl hover:bg-white/20">
-        Telegram Support
-      </Button>
-    </a>
+    <footer className="border-t border-white/10 py-10 text-center text-sm text-zinc-500">
+      © {new Date().getFullYear()} NorthSky
+    </footer>
   );
 }
 
 /* ===============================
-   COMPONENTS
+   HELPERS
 =============================== */
 function Metric({ title, value }: any) {
   return (
-    <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/30 p-4">
-      <div className="text-sm text-zinc-400">
-        {title}
-      </div>
-
-      <div className="font-medium text-white">
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function Stat({ value, label }: any) {
-  return (
-    <div>
-      <div className="text-4xl font-semibold">
-        {value}
-      </div>
-
-      <div className="mt-3 text-sm text-zinc-400">
-        {label}
-      </div>
-    </div>
-  );
-}
-
-function StatMini({ value, label }: any) {
-  return (
-    <div>
-      <div className="text-2xl font-semibold">
-        {value}
-      </div>
-
-      <div className="mt-1 text-sm text-zinc-500">
-        {label}
-      </div>
+    <div className="flex justify-between text-sm">
+      <span className="text-zinc-400">{title}</span>
+      <span>{value}</span>
     </div>
   );
 }
 
 function Status({ label, value }: any) {
   return (
-    <div className="flex items-center justify-between rounded-xl border border-white/10 bg-black/30 px-5 py-4 backdrop-blur-xl">
-      <div className="text-sm text-zinc-400">
-        {label}
-      </div>
-
-      <div className="text-sm font-medium text-emerald-400">
-        {value}
-      </div>
+    <div className="flex justify-between text-sm">
+      <span className="text-zinc-400">{label}</span>
+      <span className="text-emerald-400">{value}</span>
     </div>
   );
 }
 
-function Footer() {
+function Chart({ type, dataKey }: any) {
+  const data = type === "area" ? revenueData : leadData;
+
   return (
-    <footer className="border-t border-white/10 py-10 text-center text-sm text-zinc-500">
-      © {new Date().getFullYear()} NorthSky. All rights reserved.
-    </footer>
+    <div className="h-[240px] mt-4">
+      <ResponsiveContainer width="100%" height="100%">
+        {type === "area" ? (
+          <AreaChart data={data}>
+            <CartesianGrid stroke="#222" />
+            <XAxis dataKey="month" />
+            <YAxis />
+            <Tooltip />
+            <Area dataKey={dataKey} stroke="#6366f1" fill="#6366f1" />
+          </AreaChart>
+        ) : (
+          <BarChart data={data}>
+            <CartesianGrid stroke="#222" />
+            <XAxis dataKey="name" />
+            <YAxis />
+            <Tooltip />
+            <Bar dataKey={dataKey} fill="#6366f1" />
+          </BarChart>
+        )}
+      </ResponsiveContainer>
+    </div>
   );
 }
