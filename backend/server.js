@@ -23,7 +23,7 @@ const {
 const app = express();
 
 /* ===============================
-   SAFE SERVICE INIT
+   SAFE INIT (FAIL SOFT)
 =============================== */
 const stripe = STRIPE_SECRET_KEY
   ? new Stripe(STRIPE_SECRET_KEY, {
@@ -44,31 +44,32 @@ app.use("/stripe-webhook", express.raw({ type: "application/json" }));
 app.use(express.json({ limit: "1mb" }));
 
 /* ===============================
-   USER HELPERS
+   USER SERVICE (SUPABASE)
 =============================== */
 async function getOrCreateUser(tgUser) {
-  const { data: existing, error: findErr } = await supabase
+  const { data: existing, error: findError } = await supabase
     .from("users")
     .select("*")
     .eq("telegram_id", tgUser.id)
     .maybeSingle();
 
-  if (findErr) throw findErr;
+  if (findError) throw findError;
   if (existing) return existing;
 
-  const { data: created, error: createErr } = await supabase
+  const { data: created, error: createError } = await supabase
     .from("users")
     .insert({
       telegram_id: tgUser.id,
       username: tgUser.username || "unknown",
       plan: "free",
+      subscription_status: "inactive",
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
     .select()
     .single();
 
-  if (createErr) throw createErr;
+  if (createError) throw createError;
 
   return created;
 }
@@ -76,7 +77,7 @@ async function getOrCreateUser(tgUser) {
 const isPro = (user) => user?.plan === "pro";
 
 /* ===============================
-   TELEGRAM SAFE SEND
+   SAFE TELEGRAM SEND
 =============================== */
 function send(chatId, text) {
   if (!bot) return;
@@ -91,7 +92,7 @@ if (bot) {
     { command: "start", description: "Start bot" },
     { command: "plan", description: "View plan" },
     { command: "profile", description: "Profile" },
-    { command: "upgrade", description: "Upgrade" },
+    { command: "upgrade", description: "Upgrade to PRO" },
   ]);
 
   bot.onText(/\/start/, async (msg) => {
@@ -130,18 +131,25 @@ if (bot) {
 
     const user = await getOrCreateUser(msg.from);
 
-    const session = await stripe.checkout.sessions.create({
-      mode: "subscription",
-      payment_method_types: ["card"],
-      line_items: [{ price: STRIPE_PRICE_ID, quantity: 1 }],
-      success_url: `${CLIENT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${CLIENT_URL}/cancel`,
-      metadata: {
-        telegramId: String(user.telegram_id),
-      },
-    });
+    try {
+      const session = await stripe.checkout.sessions.create({
+        mode: "subscription",
+        payment_method_types: ["card"],
+        line_items: [{ price: STRIPE_PRICE_ID, quantity: 1 }],
 
-    send(msg.chat.id, `Payment link:\n${session.url}`);
+        success_url: `${CLIENT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${CLIENT_URL}/cancel`,
+
+        metadata: {
+          telegramId: String(user.telegram_id),
+        },
+      });
+
+      send(msg.chat.id, `Payment link:\n${session.url}`);
+    } catch (err) {
+      console.error("Stripe error:", err);
+      send(msg.chat.id, "Failed to create checkout session");
+    }
   });
 }
 
@@ -161,7 +169,8 @@ app.post("/stripe-webhook", async (req, res) => {
       req.headers["stripe-signature"],
       STRIPE_WEBHOOK_SECRET
     );
-  } catch {
+  } catch (err) {
+    console.error("Webhook error:", err.message);
     return res.sendStatus(400);
   }
 
@@ -169,16 +178,20 @@ app.post("/stripe-webhook", async (req, res) => {
     const session = event.data.object;
     const telegramId = Number(session.metadata.telegramId);
 
-    await supabase
-      .from("users")
-      .update({
-        plan: "pro",
-        subscription_status: "active",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("telegram_id", telegramId);
+    try {
+      await supabase
+        .from("users")
+        .update({
+          plan: "pro",
+          subscription_status: "active",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("telegram_id", telegramId);
 
-    send(telegramId, "PRO activated");
+      send(telegramId, "PRO activated");
+    } catch (err) {
+      console.error("DB update error:", err);
+    }
   }
 
   res.sendStatus(200);
@@ -193,6 +206,7 @@ app.get("/health", (req, res) => {
     services: {
       telegram: !!bot,
       stripe: !!stripe,
+      supabase: true,
     },
     missingEnv: {
       TELEGRAM_BOT_TOKEN: !TELEGRAM_BOT_TOKEN,
