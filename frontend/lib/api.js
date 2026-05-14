@@ -1,30 +1,13 @@
-// =====================
-// CONFIG
-// =====================
 const API = process.env.NEXT_PUBLIC_API_URL;
 
 if (typeof window !== "undefined" && !API) {
   console.warn("⚠️ Missing NEXT_PUBLIC_API_URL");
 }
 
-const BASE_URL = API ? API.replace(/\/$/, "") : "";
-
-// =====================
-// TOKEN HELPERS
-// =====================
-function getToken() {
-  if (typeof window === "undefined") return null;
-  try {
-    return localStorage.getItem("token");
-  } catch {
-    return null;
-  }
-}
-
 // =====================
 // SAFE JSON PARSE
 // =====================
-async function safeParse(res) {
+async function safeParse(res: Response) {
   const contentType = res.headers.get("content-type") || "";
 
   if (contentType.includes("application/json")) {
@@ -35,27 +18,35 @@ async function safeParse(res) {
 }
 
 // =====================
-// CORE FETCH WRAPPER (UPGRADED)
+// CORE FETCH WRAPPER (CLERK READY)
 // =====================
-async function apiFetch(path, options = {}) {
-  if (!BASE_URL) {
-    throw new Error("API base URL is not configured");
-  }
+async function apiFetch(
+  path: string,
+  options: RequestInit & { getToken?: () => Promise<string | null>; timeout?: number } = {}
+) {
+  if (!API) throw new Error("API base URL is not configured");
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), options.timeout || 10000);
+  const timeout = setTimeout(
+    () => controller.abort(),
+    options.timeout || 10000
+  );
 
-  const token = getToken();
+  let token: string | null = null;
+
+  if (options.getToken) {
+    token = await options.getToken();
+  }
 
   try {
-    const res = await fetch(`${BASE_URL}${path}`, {
+    const res = await fetch(`${API}${path}`, {
       method: options.method || "GET",
       headers: {
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(options.headers || {}),
       },
-      body: options.body || undefined,
+      body: options.body,
       signal: controller.signal,
     });
 
@@ -64,20 +55,18 @@ async function apiFetch(path, options = {}) {
     clearTimeout(timeout);
 
     if (!res.ok) {
-      const message =
-        (data && data.message) ||
-        data?.error ||
-        `Request failed (${res.status})`;
+      const error = new Error(
+        data?.message || data?.error || `Request failed (${res.status})`
+      );
 
-      const error = new Error(message);
-      error.status = res.status;
-      error.data = data;
+      (error as any).status = res.status;
+      (error as any).data = data;
 
       throw error;
     }
 
     return data;
-  } catch (err) {
+  } catch (err: any) {
     clearTimeout(timeout);
 
     if (err.name === "AbortError") {
@@ -89,44 +78,37 @@ async function apiFetch(path, options = {}) {
 }
 
 // =====================
-// LEADS
+// API METHODS
 // =====================
-export const createLead = (payload) =>
+export const createLead = (payload: any, getToken: any) =>
   apiFetch("/api/leads", {
     method: "POST",
     body: JSON.stringify(payload),
+    getToken,
   });
 
-export const getLeads = () => apiFetch("/api/leads");
+export const getLeads = (getToken: any) =>
+  apiFetch("/api/leads", { getToken });
 
-// =====================
-// SCORING
-// =====================
-export const scoreLead = (payload) =>
+export const scoreLead = (payload: any, getToken: any) =>
   apiFetch("/api/score", {
     method: "POST",
     body: JSON.stringify(payload),
+    getToken,
   });
 
-// =====================
-// STRIPE
-// =====================
-export const createCheckoutSession = (payload) =>
+export const createCheckoutSession = (payload: any, getToken: any) =>
   apiFetch("/api/payments/create-session", {
     method: "POST",
     body: JSON.stringify(payload),
+    getToken,
   });
 
-// =====================
-// BILLING PORTAL (ADDED)
-// =====================
-export const openBillingPortal = (email) =>
+export const openBillingPortal = (email: string, getToken: any) =>
   apiFetch("/api/billing/portal", {
     method: "POST",
     body: JSON.stringify({ email }),
+    getToken,
   });
 
-// =====================
-// HEALTH CHECK
-// =====================
 export const checkHealth = () => apiFetch("/");
