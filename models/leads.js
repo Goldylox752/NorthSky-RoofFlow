@@ -1,27 +1,33 @@
 import mongoose from "mongoose";
 
+/* ===============================
+   LEAD SCHEMA (MARKETPLACE CORE)
+=============================== */
+
 const LeadSchema = new mongoose.Schema(
   {
-    // ===============================
-    // CORE IDENTITY
-    // ===============================
+    /* ===============================
+       CORE IDENTITY
+    =============================== */
     name: { type: String, trim: true },
-    email: { type: String, lowercase: true, trim: true },
+    email: { type: String, lowercase: true, trim: true, index: true },
     phone: { type: String, trim: true },
-    city: { type: String, trim: true, index: true },
 
-    // ===============================
-    // STATE MACHINE (IMPORTANT UPGRADE)
-    // ===============================
+    city: { type: String, trim: true, index: true },
+    category: { type: String, trim: true, index: true }, // IMPORTANT for marketplace
+
+    /* ===============================
+       LIFECYCLE STATE MACHINE
+    =============================== */
     status: {
       type: String,
       enum: [
         "new",
+        "available",
         "locked",
-        "claimed",
+        "sold",
         "assigned",
-        "booked",
-        "billed",
+        "completed",
         "failed",
         "rejected",
       ],
@@ -29,23 +35,34 @@ const LeadSchema = new mongoose.Schema(
       index: true,
     },
 
-    // ===============================
-    // SCORING ENGINE (AI READY)
-    // ===============================
+    /* ===============================
+       MARKET VALUE ENGINE
+    =============================== */
     score: {
       type: Number,
       default: 5,
       min: 1,
-      max: 10,
+      max: 100,
       index: true,
     },
 
-    // ===============================
-    // MONETIZATION LAYER
-    // ===============================
     price: {
       type: Number,
       default: 0,
+      index: true,
+    },
+
+    currency: {
+      type: String,
+      default: "usd",
+    },
+
+    /* ===============================
+       STRIPE LINKAGE (CRITICAL UPGRADE)
+    =============================== */
+    stripe_payment_intent: {
+      type: String,
+      default: null,
       index: true,
     },
 
@@ -60,40 +77,50 @@ const LeadSchema = new mongoose.Schema(
       default: null,
     },
 
-    // ===============================
-    // CONTRACTOR OWNERSHIP SYSTEM
-    // ===============================
+    /* ===============================
+       MARKETPLACE OWNERSHIP (MULTI-TENANT)
+    =============================== */
+    buyer_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+      index: true,
+    },
+
     assigned_contractor_id: {
-      type: String,
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
       default: null,
       index: true,
     },
 
-    lock_owner: {
-      type: String,
-      default: null,
-      index: true,
+    /* ===============================
+       LOCK SYSTEM (ANTI RACE CONDITIONS)
+    =============================== */
+    lock: {
+      owner_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: null,
+        index: true,
+      },
+
+      locked_at: Date,
+
+      expires_at: {
+        type: Date,
+        index: true,
+      },
     },
 
-    locked_at: {
-      type: Date,
-      default: null,
-    },
-
-    lock_expires_at: {
-      type: Date,
-      default: null,
-      index: true,
-    },
-
-    // ===============================
-    // IDENTITY + ANTI-DUP SYSTEM
-    // ===============================
+    /* ===============================
+       DEDUPLICATION (CRITICAL FOR SCRAPING)
+    =============================== */
     dedupeKey: {
       type: String,
-      index: true,
       unique: true,
       sparse: true,
+      index: true,
     },
 
     source: {
@@ -102,26 +129,44 @@ const LeadSchema = new mongoose.Schema(
       index: true,
     },
 
-    // ===============================
-    // EVENT SORCERY (FULL AUDIT TRAIL)
-    // ===============================
+    /* ===============================
+       CONVERSION TRACKING (SAAS METRICS)
+    =============================== */
+    funnel: {
+      viewed: { type: Number, default: 0 },
+      clicked: { type: Number, default: 0 },
+      locked: { type: Number, default: 0 },
+      purchased: { type: Number, default: 0 },
+    },
+
+    /* ===============================
+       EVENT LOG (AUDIT TRAIL)
+    =============================== */
     events: [
       {
         type: {
           type: String,
           enum: [
             "created",
-            "assigned",
-            "claimed",
+            "viewed",
             "locked",
-            "billed",
+            "unlocked",
+            "purchased",
+            "assigned",
+            "completed",
             "rejected",
           ],
         },
-        contractorId: String,
+
+        userId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+
         price: Number,
         city: String,
         source: String,
+
         timestamp: {
           type: Date,
           default: Date.now,
@@ -129,18 +174,23 @@ const LeadSchema = new mongoose.Schema(
       },
     ],
   },
+
   {
     timestamps: true,
   }
 );
 
-// ===============================
-// INDEXING (CRITICAL FOR SCALE)
-// ===============================
+/* ===============================
+   INDEXES (OPTIMIZED FOR MARKETPLACE QUERIES)
+=============================== */
 LeadSchema.index({ city: 1, status: 1, score: -1 });
+LeadSchema.index({ category: 1, status: 1, price: 1 });
+LeadSchema.index({ "lock.expires_at": 1 });
+LeadSchema.index({ buyer_id: 1, createdAt: -1 });
 LeadSchema.index({ assigned_contractor_id: 1 });
-LeadSchema.index({ lock_owner: 1 });
-LeadSchema.index({ status: 1, locked_at: 1 });
 
+/* ===============================
+   EXPORT SAFE MODEL
+=============================== */
 export default mongoose.models.Lead ||
   mongoose.model("Lead", LeadSchema);
