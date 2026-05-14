@@ -39,6 +39,7 @@ const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
 
 /* ===============================
    MEMORY STORE (MVP DB)
+   (Replace with Supabase later)
 =============================== */
 const store = {
   users: new Map(),
@@ -48,7 +49,7 @@ const store = {
 };
 
 /* ===============================
-   USER SERVICE
+   USER SYSTEM
 =============================== */
 function getUser(tgUser) {
   const id = tgUser.id;
@@ -58,6 +59,7 @@ function getUser(tgUser) {
       id,
       username: tgUser.username || "unknown",
       createdAt: Date.now(),
+      purchases: 0,
     });
   }
 
@@ -65,34 +67,15 @@ function getUser(tgUser) {
 }
 
 /* ===============================
-   LEAD LOCK SYSTEM (CRITICAL UPGRADE)
-=============================== */
-function lockLead(leadId, userId) {
-  const lead = store.leads.get(leadId);
-  if (!lead) return null;
-
-  if (lead.status !== "available") return null;
-
-  lead.status = "locked";
-  lead.lockedBy = userId;
-  lead.lockedAt = Date.now();
-  lead.lockExpires = Date.now() + 10 * 60 * 1000;
-
-  store.locks.set(leadId, userId);
-
-  return lead;
-}
-
-/* ===============================
-   LEAD CREATION
+   LEAD CREATION (CORE INVENTORY)
 =============================== */
 function createLead(data) {
   const id = `lead_${Date.now()}`;
 
   const lead = {
     id,
-    name: data.name,
-    phone: data.phone,
+    name: data.name || "Unknown",
+    phone: data.phone || null,
     city: data.city,
     category: data.category || "general",
     price: data.price || 25,
@@ -102,25 +85,52 @@ function createLead(data) {
   };
 
   store.leads.set(id, lead);
+
   broadcastLead(lead);
 
   return lead;
 }
 
 /* ===============================
-   BROADCAST SYSTEM
+   LOCK SYSTEM (ANTI DOUBLE BUY)
+=============================== */
+function lockLead(leadId, userId) {
+  const lead = store.leads.get(leadId);
+  if (!lead) return null;
+
+  if (lead.status !== "available") return null;
+
+  const now = Date.now();
+
+  lead.status = "locked";
+  lead.lockedBy = userId;
+  lead.lockedAt = now;
+  lead.lockExpires = now + 10 * 60 * 1000;
+
+  store.locks.set(leadId, {
+    userId,
+    expires: lead.lockExpires,
+  });
+
+  return lead;
+}
+
+/* ===============================
+   BROADCAST SYSTEM (SALES ENGINE)
 =============================== */
 function broadcastLead(lead) {
-  const msg =
-`🔥 NEW LEAD
+  const msg = `
+🔥 NEW HIGH-QUALITY LEAD
 
 📍 City: ${lead.city}
 🏷 Category: ${lead.category}
-⭐ Score: ${lead.score}
+⭐ Score: ${lead.score}/100
 💰 Price: $${lead.price}
 
-BUY:
-${CLIENT_URL}/buy/${lead.id}`;
+⚡ First come, first served
+Buy instantly:
+/buy ${lead.id}
+  `.trim();
 
   for (const user of store.users.values()) {
     bot.sendMessage(user.id, msg);
@@ -140,8 +150,8 @@ async function createCheckout(lead, userId) {
         price_data: {
           currency: "usd",
           product_data: {
-            name: `Lead - ${lead.city}`,
-            description: lead.category,
+            name: `Lead (${lead.city})`,
+            description: `${lead.category} lead - Score ${lead.score}`,
           },
           unit_amount: lead.price * 100,
         },
@@ -160,31 +170,38 @@ async function createCheckout(lead, userId) {
 }
 
 /* ===============================
-   TELEGRAM COMMANDS
+   COMMANDS
 =============================== */
 bot.setMyCommands([
-  { command: "start", description: "Start bot" },
+  { command: "start", description: "Start" },
   { command: "leads", description: "View leads" },
-  { command: "add", description: "Add test lead" },
+  { command: "buy", description: "Buy lead" },
+  { command: "add", description: "Test lead" },
+  { command: "stats", description: "Stats" },
 ]);
 
 /* ===============================
-   START
+   START FLOW (SALES FUNNEL)
 =============================== */
 bot.onText(/\/start/, (msg) => {
   const user = getUser(msg.from);
 
   bot.sendMessage(
     msg.chat.id,
-`Welcome ${user.username}
+`
+Welcome ${user.username}
 
-🔥 Lead Marketplace Active
-Buy verified leads instantly using /leads`
+🚀 Lead Marketplace Active
+- High-quality verified leads
+- Instant purchase via Stripe
+
+Type /leads to see available leads
+`
   );
 });
 
 /* ===============================
-   LIST LEADS
+   LEADS LIST
 =============================== */
 bot.onText(/\/leads/, (msg) => {
   const leads = [...store.leads.values()]
@@ -192,11 +209,11 @@ bot.onText(/\/leads/, (msg) => {
     .slice(-10);
 
   if (!leads.length) {
-    return bot.sendMessage(msg.chat.id, "No leads available");
+    return bot.sendMessage(msg.chat.id, "No leads available right now.");
   }
 
-  const text = leads.map(l =>
-`ID: ${l.id}
+  const text = leads.map(l => `
+ID: ${l.id}
 📍 ${l.city}
 🏷 ${l.category}
 ⭐ ${l.score}
@@ -211,19 +228,17 @@ bot.onText(/\/leads/, (msg) => {
 =============================== */
 bot.onText(/\/add/, (msg) => {
   const lead = createLead({
-    name: "Test Lead",
-    phone: "hidden",
     city: "Calgary",
     category: "roofing",
     price: 29,
-    score: 82,
+    score: 85,
   });
 
-  bot.sendMessage(msg.chat.id, `Created: ${lead.id}`);
+  bot.sendMessage(msg.chat.id, `Created lead: ${lead.id}`);
 });
 
 /* ===============================
-   BUY FLOW (CORE MONEY ENTRY)
+   BUY FLOW (CORE MONEY ENGINE)
 =============================== */
 bot.onText(/\/buy (.+)/, async (msg, match) => {
   const user = getUser(msg.from);
@@ -235,16 +250,23 @@ bot.onText(/\/buy (.+)/, async (msg, match) => {
     return bot.sendMessage(msg.chat.id, "Lead not found");
   }
 
+  if (lead.status !== "available") {
+    return bot.sendMessage(msg.chat.id, "Lead already sold or locked");
+  }
+
   const locked = lockLead(leadId, user.id);
 
   if (!locked) {
-    return bot.sendMessage(msg.chat.id, "Lead already taken");
+    return bot.sendMessage(msg.chat.id, "Could not lock lead");
   }
 
   try {
     const session = await createCheckout(lead, user.id);
 
-    bot.sendMessage(msg.chat.id, `💳 Pay here:\n${session.url}`);
+    bot.sendMessage(
+      msg.chat.id,
+      `💳 Complete payment:\n${session.url}`
+    );
   } catch (err) {
     console.error(err);
     bot.sendMessage(msg.chat.id, "Payment error");
@@ -252,7 +274,26 @@ bot.onText(/\/buy (.+)/, async (msg, match) => {
 });
 
 /* ===============================
-   STRIPE WEBHOOK
+   STATS (BASIC SAAS METRICS)
+=============================== */
+bot.onText(/\/stats/, (msg) => {
+  const total = store.leads.size;
+  const sold = [...store.leads.values()].filter(l => l.status === "sold").length;
+
+  bot.sendMessage(
+    msg.chat.id,
+`
+📊 MARKETPLACE STATS
+
+Total Leads: ${total}
+Sold: ${sold}
+Revenue Ready: ${sold * 29}
+`
+  );
+});
+
+/* ===============================
+   STRIPE WEBHOOK (REVENUE ENGINE)
 =============================== */
 app.post("/stripe-webhook", express.raw({ type: "application/json" }), (req, res) => {
   let event;
@@ -269,7 +310,6 @@ app.post("/stripe-webhook", express.raw({ type: "application/json" }), (req, res
 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object;
-
     const { leadId, userId } = session.metadata;
 
     const lead = store.leads.get(leadId);
@@ -283,13 +323,20 @@ app.post("/stripe-webhook", express.raw({ type: "application/json" }), (req, res
         time: Date.now(),
       });
 
+      const user = store.users.get(Number(userId));
+      if (user) user.purchases += 1;
+
       bot.sendMessage(
         Number(userId),
-        `🔥 LEAD DELIVERED
+        `
+🔥 LEAD DELIVERED
 
 📍 ${lead.city}
 🏷 ${lead.category}
-⭐ ${lead.score}`
+⭐ ${lead.score}
+
+Thank you for your purchase.
+        `.trim()
       );
     }
   }
@@ -298,13 +345,16 @@ app.post("/stripe-webhook", express.raw({ type: "application/json" }), (req, res
 });
 
 /* ===============================
-   HEALTH
+   HEALTH CHECK
 =============================== */
 app.get("/health", (req, res) => {
   res.json({
     leads: store.leads.size,
     users: store.users.size,
     sold: [...store.leads.values()].filter(l => l.status === "sold").length,
+    revenue_estimate: [...store.leads.values()]
+      .filter(l => l.status === "sold")
+      .reduce((a, b) => a + b.price, 0),
   });
 });
 
@@ -312,5 +362,5 @@ app.get("/health", (req, res) => {
    START SERVER
 =============================== */
 app.listen(PORT, () => {
-  console.log(`🚀 Lead Marketplace running on ${PORT}`);
+  console.log(`🚀 SaaS Lead Bot running on ${PORT}`);
 });
