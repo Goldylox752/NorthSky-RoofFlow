@@ -33,7 +33,7 @@ const {
 } = process.env;
 
 /* ===============================
-   INIT
+   INIT SERVICES
 =============================== */
 const app = express();
 
@@ -50,7 +50,7 @@ const twilioClient = twilio(
 );
 
 /* ===============================
-   MEMORY STORE
+   MEMORY STORE (MVP DATABASE)
 =============================== */
 const store = {
   users: new Map(),
@@ -59,7 +59,7 @@ const store = {
 };
 
 /* ===============================
-   USER
+   USER SYSTEM
 =============================== */
 function getUser(tgUser) {
   const id = tgUser.id;
@@ -78,19 +78,16 @@ function getUser(tgUser) {
 }
 
 /* ===============================
-   TELEGRAM SAFE SEND
+   SAFE SEND HELPERS
 =============================== */
 function sendTG(chatId, text) {
   try {
     return bot.sendMessage(chatId, text);
   } catch (e) {
-    console.error("TG error:", e.message);
+    console.error("Telegram error:", e.message);
   }
 }
 
-/* ===============================
-   SMS DELIVERY
-=============================== */
 async function sendSMS(phone, message) {
   if (!phone) return;
 
@@ -106,9 +103,9 @@ async function sendSMS(phone, message) {
 }
 
 /* ===============================
-   📞 VOICE CALL ENGINE (NEW)
+   📞 VOICE CALL ENGINE
 =============================== */
-async function sendVoiceCall(phone) {
+async function sendVoiceCall(phone, lead) {
   if (!phone) return;
 
   try {
@@ -118,8 +115,10 @@ async function sendVoiceCall(phone) {
       twiml: `
         <Response>
           <Say voice="alice">
-            Hello. You just received a new lead from your marketplace system.
-            Please check your Telegram or dashboard for details.
+            Hello. This is your automated sales system.
+            You just purchased a ${lead.category} lead in ${lead.city}.
+            Score is ${lead.score} out of 100.
+            Please check your Telegram or dashboard for full details.
           </Say>
         </Response>
       `,
@@ -130,7 +129,7 @@ async function sendVoiceCall(phone) {
 }
 
 /* ===============================
-   LEADS
+   LEAD ENGINE
 =============================== */
 function createLead(data) {
   const id = `lead_${Date.now()}`;
@@ -152,7 +151,7 @@ function createLead(data) {
 }
 
 /* ===============================
-   LOCK SYSTEM
+   LEAD LOCK SYSTEM
 =============================== */
 function lockLead(leadId, userId) {
   const lead = store.leads.get(leadId);
@@ -168,16 +167,16 @@ function lockLead(leadId, userId) {
 }
 
 /* ===============================
-   BROADCAST SALES
+   SALES BROADCAST ENGINE
 =============================== */
 function broadcastLead(lead) {
   const msg = `
-🔥 NEW LEAD
+🔥 NEW HIGH-CONVERTING LEAD
 
-📍 ${lead.city}
-🏷 ${lead.category}
-⭐ ${lead.score}
-💰 $${lead.price}
+📍 City: ${lead.city}
+🏷 Category: ${lead.category}
+⭐ Score: ${lead.score}
+💰 Price: $${lead.price}
 
 /buy ${lead.id}
   `.trim();
@@ -199,7 +198,7 @@ async function createCheckout(lead, userId) {
         price_data: {
           currency: "usd",
           product_data: {
-            name: `Lead ${lead.city}`,
+            name: `Lead - ${lead.city}`,
             description: lead.category,
           },
           unit_amount: lead.price * 100,
@@ -230,30 +229,29 @@ bot.setMyCommands([
 bot.onText(/\/start/, (msg) => {
   const user = getUser(msg.from);
 
-  sendTG(
-    msg.chat.id,
+  sendTG(msg.chat.id,
 `Welcome ${user.username}
 
-🚀 Lead Marketplace Active`
+🚀 AI Sales Marketplace Active`
   );
 });
 
 /* ===============================
-   LEADS
+   LEADS LIST
 =============================== */
 bot.onText(/\/leads/, (msg) => {
   const leads = [...store.leads.values()]
     .filter(l => l.status === "available")
     .slice(-10);
 
-  if (!leads.length) return sendTG(msg.chat.id, "No leads");
+  if (!leads.length) return sendTG(msg.chat.id, "No leads available");
 
-  sendTG(
-    msg.chat.id,
+  sendTG(msg.chat.id,
     leads.map(l =>
 `ID: ${l.id}
 📍 ${l.city}
 🏷 ${l.category}
+⭐ ${l.score}
 💰 $${l.price}`
     ).join("\n\n---\n")
   );
@@ -270,7 +268,7 @@ bot.onText(/\/add/, (msg) => {
     score: 85,
   });
 
-  sendTG(msg.chat.id, `Created ${lead.id}`);
+  sendTG(msg.chat.id, `Created: ${lead.id}`);
 });
 
 /* ===============================
@@ -284,15 +282,15 @@ bot.onText(/\/buy (.+)/, async (msg, match) => {
   if (!lead) return sendTG(msg.chat.id, "Not found");
 
   const locked = lockLead(leadId, user.id);
-  if (!locked) return sendTG(msg.chat.id, "Taken");
+  if (!locked) return sendTG(msg.chat.id, "Already taken");
 
   const session = await createCheckout(lead, user.id);
 
-  sendTG(msg.chat.id, `Pay:\n${session.url}`);
+  sendTG(msg.chat.id, `💳 Pay here:\n${session.url}`);
 });
 
 /* ===============================
-   STRIPE WEBHOOK + VOICE + SMS
+   STRIPE WEBHOOK + SMS + VOICE
 =============================== */
 app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (req, res) => {
   let event;
@@ -325,15 +323,13 @@ app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (re
 ⭐ ${lead.score}
       `.trim();
 
-      // Telegram
       sendTG(Number(userId), msg);
 
-      // SMS
       if (user?.phone) {
         await sendSMS(user.phone, msg);
 
-        // 📞 VOICE CALL (NEW POWER FEATURE)
-        await sendVoiceCall(user.phone);
+        // 📞 VOICE CALL (AUTOMATED CLOSING TOUCH)
+        await sendVoiceCall(user.phone, lead);
       }
     }
   }
@@ -348,9 +344,9 @@ bot.onText(/\/stats/, (msg) => {
   const total = store.leads.size;
   const sold = [...store.leads.values()].filter(l => l.status === "sold").length;
 
-  sendTG(
-    msg.chat.id,
-`Stats:
+  sendTG(msg.chat.id,
+`📊 STATS
+
 Total: ${total}
 Sold: ${sold}
 Revenue: $${sold * 29}`
@@ -371,5 +367,5 @@ app.get("/health", (req, res) => {
    START
 =============================== */
 app.listen(PORT, () => {
-  console.log(`🚀 Lead SaaS + Voice Calls running on ${PORT}`);
+  console.log(`🚀 AI Sales SaaS + Voice + SMS running on ${PORT}`);
 });
