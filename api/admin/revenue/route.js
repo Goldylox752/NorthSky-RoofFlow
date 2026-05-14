@@ -1,18 +1,47 @@
 import { supabase } from "@/lib/supabase";
+import { NextResponse } from "next/server";
 
 export async function GET() {
-  const { data } = await supabase.from("leads").select("price, status");
+  try {
+    const { data, error } = await supabase
+      .from("leads")
+      .select("price, status");
 
-  const revenue = (data || []).reduce(
-    (sum, l) => sum + (l.price || 0),
-    0
-  );
+    if (error) {
+      return NextResponse.json(
+        { error: "Failed to fetch leads", details: error.message },
+        { status: 500 }
+      );
+    }
 
-  const billed = (data || []).filter((l) => l.status === "assigned").length;
+    const leads = data ?? [];
 
-  return Response.json({
-    revenue,
-    leads: data?.length || 0,
-    billed,
-  });
+    const revenue = leads.reduce((sum, lead) => {
+      const price = typeof lead.price === "number" ? lead.price : 0;
+      return sum + price;
+    }, 0);
+
+    const billed = leads.filter(
+      (lead) => lead.status === "assigned"
+    ).length;
+
+    return NextResponse.json(
+      {
+        success: true,
+        revenue,
+        leads: leads.length,
+        billed,
+      },
+      { status: 200 }
+    );
+  } catch (err: any) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Server error",
+        message: err?.message ?? "Unknown error",
+      },
+      { status: 500 }
+    );
+  }
 }
