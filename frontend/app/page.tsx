@@ -20,7 +20,8 @@ import { Card } from "@/components/ui/card";
 /* ===============================
    CONFIG
 =============================== */
-const TELEGRAM_BOT = "https://t.me/YOUR_BOT_USERNAME";
+const TELEGRAM_BOT =
+  process.env.NEXT_PUBLIC_TELEGRAM_BOT_URL || "#";
 
 /* ===============================
    DATA
@@ -60,43 +61,28 @@ const stagger = {
   },
 };
 
+type GoFn = (plan: string) => void;
+
 export default function HomePage() {
   const router = useRouter();
 
-  const go = (plan: string) => {
-    router.push(`/checkout?plan=${plan}`);
+  const go: GoFn = (plan) => {
+    if (!plan) return;
+    router.push(`/checkout?plan=${encodeURIComponent(plan)}`);
   };
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-black text-white">
-
-      {/* LIGHTING */}
       <div className="absolute inset-0 -z-50 bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.25),transparent_40%),radial-gradient(circle_at_bottom_right,rgba(168,85,247,0.18),transparent_35%)]" />
 
-      {/* NAV */}
       <Navbar />
-
-      {/* HERO */}
       <Hero go={go} />
-
-      {/* STATS */}
       <Stats />
-
-      {/* ANALYTICS */}
       <Analytics />
-
-      {/* FEATURES */}
       <Features />
-
-      {/* PRICING */}
       <Pricing go={go} />
-
-      {/* OPS */}
       <Operations />
-
-      {/* CTA */}
       <CTA go={go} />
-
       <Footer />
     </main>
   );
@@ -126,7 +112,7 @@ function Navbar() {
             Pricing
           </a>
 
-          <a href={TELEGRAM_BOT} target="_blank">
+          <a href={TELEGRAM_BOT} target="_blank" rel="noreferrer">
             <Button variant="outline">Telegram</Button>
           </a>
         </div>
@@ -138,7 +124,7 @@ function Navbar() {
 /* ===============================
    HERO
 =============================== */
-function Hero({ go }: any) {
+function Hero({ go }: { go: GoFn }) {
   return (
     <motion.section
       initial="hidden"
@@ -152,8 +138,8 @@ function Hero({ go }: any) {
         </div>
 
         <h1 className="mt-8 text-6xl font-semibold leading-tight">
-          Operate your
-          <span className="text-indigo-400"> automation SaaS</span>
+          Operate your{" "}
+          <span className="text-indigo-400">automation SaaS</span>
         </h1>
 
         <p className="mt-6 text-zinc-400">
@@ -162,16 +148,15 @@ function Hero({ go }: any) {
 
         <div className="mt-10 flex gap-4">
           <Button onClick={() => go("growth")}>Launch</Button>
-          <a href={TELEGRAM_BOT} target="_blank">
+
+          <a href={TELEGRAM_BOT} target="_blank" rel="noreferrer">
             <Button variant="outline">Telegram</Button>
           </a>
         </div>
       </motion.div>
 
-      {/* GLASS PANEL */}
       <motion.div variants={fadeUp}>
         <Card className="border border-white/10 bg-white/5 p-6 backdrop-blur-2xl shadow-[0_0_80px_rgba(99,102,241,0.15)]">
-
           <h3 className="text-lg font-medium">Live Dashboard</h3>
           <p className="text-sm text-zinc-400">Real-time system</p>
 
@@ -180,7 +165,6 @@ function Hero({ go }: any) {
             <Metric title="Leads" value="1,248" />
             <Metric title="Conversion" value="24.8%" />
           </div>
-
         </Card>
       </motion.div>
     </motion.section>
@@ -222,32 +206,29 @@ function Stats() {
 function Analytics() {
   return (
     <section className="mx-auto max-w-7xl px-6 py-28">
-
       <h2 className="text-4xl font-semibold">Analytics</h2>
       <p className="mt-3 text-zinc-400">Live revenue + lead tracking</p>
 
       <div className="mt-10 grid gap-6 md:grid-cols-2">
-
-        <Card className="bg-white/5 p-6 backdrop-blur-2xl border border-white/10">
+        <Card className="bg-white/5 p-6 border border-white/10 backdrop-blur-2xl">
           <h3>Revenue</h3>
           <Chart type="area" dataKey="revenue" />
         </Card>
 
-        <Card className="bg-white/5 p-6 backdrop-blur-2xl border border-white/10">
+        <Card className="bg-white/5 p-6 border border-white/10 backdrop-blur-2xl">
           <h3>Leads</h3>
           <Chart type="bar" dataKey="leads" />
         </Card>
-
       </div>
     </section>
   );
 }
 
 /* ===============================
-   FEATURES (REAL MOTION GRID)
+   FEATURES
 =============================== */
 function Features() {
-  const items = [
+  const items: string[] = [
     "Telegram Bot System",
     "Stripe Automation",
     "Lead Engine",
@@ -267,7 +248,7 @@ function Features() {
       <div className="grid gap-6 md:grid-cols-3">
         {items.map((i) => (
           <motion.div key={i} variants={fadeUp} whileHover={{ scale: 1.03 }}>
-            <Card className="border border-white/10 bg-white/5 p-6 backdrop-blur-2xl hover:shadow-[0_0_40px_rgba(99,102,241,0.15)]">
+            <Card className="border border-white/10 bg-white/5 p-6 backdrop-blur-2xl">
               {i}
             </Card>
           </motion.div>
@@ -280,20 +261,21 @@ function Features() {
 /* ===============================
    PRICING
 =============================== */
-function Pricing({ go }: any) {
+function Pricing({ go }: { go: GoFn }) {
   return (
     <section className="mx-auto max-w-7xl px-6 py-28">
       <div className="grid gap-6 md:grid-cols-3">
-
         {["Starter", "Growth", "Elite"].map((p) => (
-          <Card key={p} className="bg-white/5 p-6 border border-white/10 backdrop-blur-2xl">
+          <Card
+            key={p}
+            className="bg-white/5 p-6 border border-white/10 backdrop-blur-2xl"
+          >
             <h3>{p}</h3>
             <Button className="mt-6 w-full" onClick={() => go(p.toLowerCase())}>
               Upgrade
             </Button>
           </Card>
         ))}
-
       </div>
     </section>
   );
@@ -321,7 +303,7 @@ function Operations() {
 /* ===============================
    CTA
 =============================== */
-function CTA({ go }: any) {
+function CTA({ go }: { go: GoFn }) {
   return (
     <section className="text-center py-28">
       <h2 className="text-5xl font-semibold">Launch your system</h2>
@@ -347,7 +329,7 @@ function Footer() {
 /* ===============================
    HELPERS
 =============================== */
-function Metric({ title, value }: any) {
+function Metric({ title, value }: { title: string; value: string }) {
   return (
     <div className="flex justify-between text-sm">
       <span className="text-zinc-400">{title}</span>
@@ -356,7 +338,7 @@ function Metric({ title, value }: any) {
   );
 }
 
-function Status({ label, value }: any) {
+function Status({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between text-sm">
       <span className="text-zinc-400">{label}</span>
@@ -365,7 +347,7 @@ function Status({ label, value }: any) {
   );
 }
 
-function Chart({ type, dataKey }: any) {
+function Chart({ type, dataKey }: { type: "area" | "bar"; dataKey: string }) {
   const data = type === "area" ? revenueData : leadData;
 
   return (
