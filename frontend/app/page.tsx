@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useMemo } from "react";
 import { motion } from "framer-motion";
 import {
   Area,
@@ -21,34 +22,13 @@ import { Card } from "@/components/ui/card";
    CONFIG
 =============================== */
 const TELEGRAM_BOT =
-  process.env.NEXT_PUBLIC_TELEGRAM_BOT_URL || "#";
+  process.env.NEXT_PUBLIC_TELEGRAM_BOT_URL ?? "#";
 
 /* ===============================
-   DATA
-=============================== */
-const revenueData = [
-  { month: "Jan", revenue: 12000 },
-  { month: "Feb", revenue: 18000 },
-  { month: "Mar", revenue: 22000 },
-  { month: "Apr", revenue: 31000 },
-  { month: "May", revenue: 48220 },
-];
-
-const leadData = [
-  { name: "Mon", leads: 120 },
-  { name: "Tue", leads: 180 },
-  { name: "Wed", leads: 240 },
-  { name: "Thu", leads: 210 },
-  { name: "Fri", leads: 320 },
-  { name: "Sat", leads: 280 },
-  { name: "Sun", leads: 340 },
-];
-
-/* ===============================
-   ANIMATION VARIANTS
+   ANIMATION (optimized)
 =============================== */
 const fadeUp = {
-  hidden: { opacity: 0, y: 20 },
+  hidden: { opacity: 0, y: 16 },
   show: { opacity: 1, y: 0 },
 };
 
@@ -56,35 +36,77 @@ const stagger = {
   hidden: {},
   show: {
     transition: {
-      staggerChildren: 0.08,
+      staggerChildren: 0.06,
     },
   },
 };
 
-type GoFn = (plan: string) => void;
-
+/* ===============================
+   PAGE
+=============================== */
 export default function HomePage() {
   const router = useRouter();
 
-  const go: GoFn = (plan) => {
+  const go = (plan: string) => {
     if (!plan) return;
     router.push(`/checkout?plan=${encodeURIComponent(plan)}`);
   };
 
+  const revenueData = useMemo(
+    () => [
+      { month: "Jan", revenue: 12000 },
+      { month: "Feb", revenue: 18000 },
+      { month: "Mar", revenue: 22000 },
+      { month: "Apr", revenue: 31000 },
+      { month: "May", revenue: 48220 },
+    ],
+    []
+  );
+
+  const leadData = useMemo(
+    () => [
+      { name: "Mon", leads: 120 },
+      { name: "Tue", leads: 180 },
+      { name: "Wed", leads: 240 },
+      { name: "Thu", leads: 210 },
+      { name: "Fri", leads: 320 },
+      { name: "Sat", leads: 280 },
+      { name: "Sun", leads: 340 },
+    ],
+    []
+  );
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-black text-white">
-      <div className="absolute inset-0 -z-50 bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.25),transparent_40%),radial-gradient(circle_at_bottom_right,rgba(168,85,247,0.18),transparent_35%)]" />
+      <Background />
 
       <Navbar />
+
       <Hero go={go} />
+
       <Stats />
-      <Analytics />
+
+      <Analytics revenueData={revenueData} leadData={leadData} />
+
       <Features />
+
       <Pricing go={go} />
+
       <Operations />
+
       <CTA go={go} />
+
       <Footer />
     </main>
+  );
+}
+
+/* ===============================
+   BACKGROUND
+=============================== */
+function Background() {
+  return (
+    <div className="absolute inset-0 -z-50 bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.25),transparent_40%),radial-gradient(circle_at_bottom_right,rgba(168,85,247,0.18),transparent_35%)]" />
   );
 }
 
@@ -124,7 +146,7 @@ function Navbar() {
 /* ===============================
    HERO
 =============================== */
-function Hero({ go }: { go: GoFn }) {
+function Hero({ go }: { go: (plan: string) => void }) {
   return (
     <motion.section
       initial="hidden"
@@ -143,7 +165,7 @@ function Hero({ go }: { go: GoFn }) {
         </h1>
 
         <p className="mt-6 text-zinc-400">
-          Stripe billing, Telegram bots, lead routing, and analytics — unified.
+          Stripe billing, Telegram bots, lead routing, analytics — unified.
         </p>
 
         <div className="mt-10 flex gap-4">
@@ -156,7 +178,7 @@ function Hero({ go }: { go: GoFn }) {
       </motion.div>
 
       <motion.div variants={fadeUp}>
-        <Card className="border border-white/10 bg-white/5 p-6 backdrop-blur-2xl shadow-[0_0_80px_rgba(99,102,241,0.15)]">
+        <Card className="border border-white/10 bg-white/5 p-6 backdrop-blur-2xl">
           <h3 className="text-lg font-medium">Live Dashboard</h3>
           <p className="text-sm text-zinc-400">Real-time system</p>
 
@@ -203,24 +225,43 @@ function Stats() {
 /* ===============================
    ANALYTICS
 =============================== */
-function Analytics() {
+function Analytics({
+  revenueData,
+  leadData,
+}: {
+  revenueData: any[];
+  leadData: any[];
+}) {
   return (
     <section className="mx-auto max-w-7xl px-6 py-28">
       <h2 className="text-4xl font-semibold">Analytics</h2>
       <p className="mt-3 text-zinc-400">Live revenue + lead tracking</p>
 
       <div className="mt-10 grid gap-6 md:grid-cols-2">
-        <Card className="bg-white/5 p-6 border border-white/10 backdrop-blur-2xl">
-          <h3>Revenue</h3>
-          <Chart type="area" dataKey="revenue" />
-        </Card>
+        <ChartCard title="Revenue">
+          <Chart type="area" dataKey="revenue" data={revenueData} />
+        </ChartCard>
 
-        <Card className="bg-white/5 p-6 border border-white/10 backdrop-blur-2xl">
-          <h3>Leads</h3>
-          <Chart type="bar" dataKey="leads" />
-        </Card>
+        <ChartCard title="Leads">
+          <Chart type="bar" dataKey="leads" data={leadData} />
+        </ChartCard>
       </div>
     </section>
+  );
+}
+
+function ChartCard({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Card className="bg-white/5 p-6 border border-white/10 backdrop-blur-2xl">
+      <h3>{title}</h3>
+      {children}
+    </Card>
   );
 }
 
@@ -228,7 +269,7 @@ function Analytics() {
    FEATURES
 =============================== */
 function Features() {
-  const items: string[] = [
+  const items = [
     "Telegram Bot System",
     "Stripe Automation",
     "Lead Engine",
@@ -238,40 +279,36 @@ function Features() {
   ];
 
   return (
-    <motion.section
-      initial="hidden"
-      whileInView="show"
-      viewport={{ once: true }}
-      variants={stagger}
-      className="mx-auto max-w-7xl px-6 py-28"
-    >
+    <section id="features" className="mx-auto max-w-7xl px-6 py-28">
       <div className="grid gap-6 md:grid-cols-3">
         {items.map((i) => (
-          <motion.div key={i} variants={fadeUp} whileHover={{ scale: 1.03 }}>
-            <Card className="border border-white/10 bg-white/5 p-6 backdrop-blur-2xl">
-              {i}
-            </Card>
-          </motion.div>
+          <Card
+            key={i}
+            className="border border-white/10 bg-white/5 p-6 hover:scale-[1.03] transition"
+          >
+            {i}
+          </Card>
         ))}
       </div>
-    </motion.section>
+    </section>
   );
 }
 
 /* ===============================
    PRICING
 =============================== */
-function Pricing({ go }: { go: GoFn }) {
+function Pricing({ go }: { go: (plan: string) => void }) {
   return (
-    <section className="mx-auto max-w-7xl px-6 py-28">
+    <section id="pricing" className="mx-auto max-w-7xl px-6 py-28">
       <div className="grid gap-6 md:grid-cols-3">
-        {["Starter", "Growth", "Elite"].map((p) => (
+        {["starter", "growth", "elite"].map((p) => (
           <Card
             key={p}
-            className="bg-white/5 p-6 border border-white/10 backdrop-blur-2xl"
+            className="bg-white/5 p-6 border border-white/10"
           >
-            <h3>{p}</h3>
-            <Button className="mt-6 w-full" onClick={() => go(p.toLowerCase())}>
+            <h3 className="capitalize">{p}</h3>
+
+            <Button className="mt-6 w-full" onClick={() => go(p)}>
               Upgrade
             </Button>
           </Card>
@@ -282,32 +319,22 @@ function Pricing({ go }: { go: GoFn }) {
 }
 
 /* ===============================
-   OPS
+   OPS + CTA + FOOTER (unchanged style)
 =============================== */
 function Operations() {
   return (
     <section className="mx-auto max-w-7xl px-6 py-28">
-      <Card className="bg-white/5 p-8 border border-white/10 backdrop-blur-2xl">
+      <Card className="bg-white/5 p-8 border border-white/10">
         <h2>System Status</h2>
-
-        <div className="mt-6 space-y-3">
-          <Status label="Stripe" value="OK" />
-          <Status label="Telegram" value="OK" />
-          <Status label="Webhooks" value="OK" />
-        </div>
       </Card>
     </section>
   );
 }
 
-/* ===============================
-   CTA
-=============================== */
-function CTA({ go }: { go: GoFn }) {
+function CTA({ go }: { go: (plan: string) => void }) {
   return (
     <section className="text-center py-28">
       <h2 className="text-5xl font-semibold">Launch your system</h2>
-
       <Button className="mt-8" onClick={() => go("growth")}>
         Start
       </Button>
@@ -315,9 +342,6 @@ function CTA({ go }: { go: GoFn }) {
   );
 }
 
-/* ===============================
-   FOOTER
-=============================== */
 function Footer() {
   return (
     <footer className="border-t border-white/10 py-10 text-center text-sm text-zinc-500">
@@ -338,18 +362,15 @@ function Metric({ title, value }: { title: string; value: string }) {
   );
 }
 
-function Status({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between text-sm">
-      <span className="text-zinc-400">{label}</span>
-      <span className="text-emerald-400">{value}</span>
-    </div>
-  );
-}
-
-function Chart({ type, dataKey }: { type: "area" | "bar"; dataKey: string }) {
-  const data = type === "area" ? revenueData : leadData;
-
+function Chart({
+  type,
+  dataKey,
+  data,
+}: {
+  type: "area" | "bar";
+  dataKey: string;
+  data: any[];
+}) {
   return (
     <div className="h-[240px] mt-4">
       <ResponsiveContainer width="100%" height="100%">
