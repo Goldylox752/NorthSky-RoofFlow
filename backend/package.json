@@ -1,7 +1,7 @@
 {
   "name": "flow-os-backend",
   "version": "1.0.0",
-  "description": "Production backend API for Flow OS (Stripe + Telegram + Supabase automation SaaS)",
+  "description": "Production-ready SaaS backend for Flow OS (Stripe + Telegram + Supabase automation platform)",
   "main": "server.js",
   "license": "MIT",
   "private": true,
@@ -27,7 +27,6 @@
     "node-telegram-bot-api": "^0.66.0",
 
     "express-rate-limit": "^7.5.0",
-
     "helmet": "^7.1.0",
     "compression": "^1.7.4"
   },
@@ -42,8 +41,10 @@
     "stripe",
     "telegram",
     "automation",
-    "supabase",
+    "crm",
+    "multi-tenant",
     "billing",
-    "webhooks"
+    "webhooks",
+    "supabase"
   ]
 }
