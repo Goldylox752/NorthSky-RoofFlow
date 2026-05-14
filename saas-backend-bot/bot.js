@@ -6,20 +6,21 @@ const Stripe = require("stripe");
 const twilio = require("twilio");
 
 /* ===============================
-   ENV SAFETY
+   ENV CHECK
 =============================== */
 const REQUIRED = [
   "TELEGRAM_BOT_TOKEN",
   "STRIPE_SECRET_KEY",
+  "STRIPE_WEBHOOK_SECRET",
   "CLIENT_URL",
   "TWILIO_ACCOUNT_SID",
   "TWILIO_AUTH_TOKEN",
   "TWILIO_PHONE_NUMBER",
 ];
 
-REQUIRED.forEach((key) => {
+for (const key of REQUIRED) {
   if (!process.env[key]) throw new Error(`Missing env: ${key}`);
-});
+}
 
 const {
   TELEGRAM_BOT_TOKEN,
@@ -33,103 +34,103 @@ const {
 } = process.env;
 
 /* ===============================
-   INIT
+   INIT SERVICES
 =============================== */
 const app = express();
+const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
 
 const stripe = new Stripe(STRIPE_SECRET_KEY, {
   apiVersion: "2025-04-30.basil",
 });
 
-const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
-
 const twilioClient = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
 
 /* ===============================
-   MEMORY DB
+   MEMORY DB (upgrade later to Supabase)
 =============================== */
-const store = {
+const db = {
   users: new Map(),
   leads: new Map(),
-  locks: new Map(),
-
-  // 🧠 NEW: sales funnel tracking
-  funnels: new Map(), // userId -> { leadId, stage }
+  funnels: new Map(), // AI sales state machine
 };
 
 /* ===============================
    USER SYSTEM
 =============================== */
 function getUser(tgUser) {
-  const id = tgUser.id;
-
-  if (!store.users.has(id)) {
-    store.users.set(id, {
-      id,
+  if (!db.users.has(tgUser.id)) {
+    db.users.set(tgUser.id, {
+      id: tgUser.id,
       username: tgUser.username || "unknown",
       phone: null,
-      purchases: 0,
       createdAt: Date.now(),
+      totalDeals: 0,
     });
   }
-
-  return store.users.get(id);
+  return db.users.get(tgUser.id);
 }
 
 /* ===============================
    SAFE SEND
 =============================== */
-function sendTG(chatId, text) {
-  try {
-    return bot.sendMessage(chatId, text);
-  } catch (e) {
-    console.error("Telegram error:", e.message);
-  }
+const sendTG = (chatId, text) =>
+  bot.sendMessage(chatId, text).catch(() => {});
+
+/* ===============================
+   TWILIO LAYER (SMS + VOICE)
+=============================== */
+async function sendSMS(phone, text) {
+  if (!phone) return;
+  await twilioClient.messages.create({
+    body: text,
+    from: TWILIO_PHONE_NUMBER,
+    to: phone,
+  });
+}
+
+async function sendVoice(phone, script) {
+  if (!phone) return;
+
+  await twilioClient.calls.create({
+    to: phone,
+    from: TWILIO_PHONE_NUMBER,
+    twiml: `
+      <Response>
+        <Say voice="alice">${script}</Say>
+      </Response>
+    `,
+  });
 }
 
 /* ===============================
-   TWILIO SMS
+   🧠 AI SALES ENGINE (RULE-BASED CORE)
+   (later replace with GPT decision layer)
 =============================== */
-async function sendSMS(phone, message) {
-  if (!phone) return;
+function aiDecision(stage, lead) {
+  switch (stage) {
+    case "NEW":
+      return {
+        sms: `New ${lead.category} lead available in ${lead.city}. Act fast.`,
+        voice: `New high priority lead detected in ${lead.city}.`,
+        next: "FOLLOWUP_1",
+      };
 
-  try {
-    await twilioClient.messages.create({
-      body: message,
-      from: TWILIO_PHONE_NUMBER,
-      to: phone,
-    });
-  } catch (e) {
-    console.error("SMS error:", e.message);
-  }
-}
+    case "FOLLOWUP_1":
+      return {
+        sms: `Reminder: ${lead.category} lead still unclaimed.`,
+        voice: `First reminder. Lead still active.`,
+        next: "FOLLOWUP_2",
+      };
 
-/* ===============================
-   TWILIO VOICE CALL
-=============================== */
-async function sendVoiceCall(phone, lead, tone = "followup") {
-  if (!phone) return;
+    case "FOLLOWUP_2":
+      return {
+        sms: `Final alert: lead may be assigned to another buyer.`,
+        voice: `Final warning. Lead closing soon.`,
+        next: "CLOSE",
+      };
 
-  const scripts = {
-    followup: `Hello. This is your AI sales assistant. You have a high priority lead waiting in your dashboard.`,
-    urgent: `Urgent notification. A high value lead is waiting for your immediate review.`,
-    closing: `Final reminder. Your lead opportunity is still active and may be assigned to another buyer.`,
-  };
-
-  try {
-    await twilioClient.calls.create({
-      to: phone,
-      from: TWILIO_PHONE_NUMBER,
-      twiml: `
-        <Response>
-          <Say voice="alice">
-            ${scripts[tone] || scripts.followup}
-          </Say>
-        </Response>
-      `,
-    });
-  } catch (e) {
-    console.error("Voice error:", e.message);
+    default:
+      return null;
   }
 }
 
@@ -149,27 +150,24 @@ function createLead(data) {
     createdAt: Date.now(),
   };
 
-  store.leads.set(id, lead);
+  db.leads.set(id, lead);
 
   broadcastLead(lead);
   return lead;
 }
 
 /* ===============================
-   LOCK SYSTEM
+   LEAD LOCKING (SALES CONTROL)
 =============================== */
 function lockLead(leadId, userId) {
-  const lead = store.leads.get(leadId);
+  const lead = db.leads.get(leadId);
   if (!lead || lead.status !== "available") return null;
 
   lead.status = "locked";
-  lead.lockedBy = userId;
-  lead.lockedAt = Date.now();
 
-  // 🧠 start funnel tracking
-  store.funnels.set(userId, {
+  db.funnels.set(userId, {
     leadId,
-    stage: "locked",
+    stage: "NEW",
     updatedAt: Date.now(),
   });
 
@@ -177,21 +175,21 @@ function lockLead(leadId, userId) {
 }
 
 /* ===============================
-   BROADCAST SALES
+   BROADCAST SYSTEM (SALES PUSH)
 =============================== */
 function broadcastLead(lead) {
   const msg = `
-🔥 NEW HIGH-CONVERTING LEAD
+🔥 NEW AI VERIFIED LEAD
 
 📍 ${lead.city}
 🏷 ${lead.category}
-⭐ ${lead.score}/100
+⭐ Score: ${lead.score}/100
 💰 $${lead.price}
 
 /buy ${lead.id}
   `.trim();
 
-  for (const user of store.users.values()) {
+  for (const user of db.users.values()) {
     sendTG(user.id, msg);
   }
 }
@@ -199,7 +197,7 @@ function broadcastLead(lead) {
 /* ===============================
    STRIPE CHECKOUT
 =============================== */
-async function createCheckout(lead, userId) {
+async function checkout(lead, userId) {
   return stripe.checkout.sessions.create({
     mode: "payment",
     payment_method_types: ["card"],
@@ -226,40 +224,49 @@ async function createCheckout(lead, userId) {
 }
 
 /* ===============================
-   🚀 AI FOLLOW-UP ENGINE (NEW CORE)
+   🚀 AI FOLLOW-UP ENGINE (CORE DIFFERENTIATOR)
 =============================== */
-function scheduleFollowUps(userId, phone, lead) {
-  if (!phone) return;
+function runFollowUp(user, lead, stage = "FOLLOWUP_1") {
+  const decision = aiDecision(stage, lead);
+  if (!decision) return;
 
-  // 1 min follow-up (SMS)
-  setTimeout(() => {
-    sendSMS(
-      phone,
-      `Reminder: Your lead in ${lead.city} is still active. Complete action now.`
-    );
-  }, 60 * 1000);
+  const funnel = db.funnels.get(user.id);
+  if (!funnel) return;
 
-  // 10 min follow-up (SMS + Voice)
-  setTimeout(() => {
-    sendSMS(phone, `Final reminder: high value ${lead.category} lead still available.`);
-    sendVoiceCall(phone, lead, "urgent");
-  }, 10 * 60 * 1000);
+  funnel.stage = decision.next;
+  funnel.updatedAt = Date.now();
 
-  // 1 hour follow-up (closing call)
+  // SMS
+  sendSMS(user.phone, decision.sms);
+
+  // Voice call
+  sendVoice(
+    user.phone,
+    decision.voice + " Please check your dashboard."
+  );
+
+  // schedule next stage
+  const delay =
+    stage === "FOLLOWUP_1"
+      ? 5 * 60 * 1000
+      : 15 * 60 * 1000;
+
   setTimeout(() => {
-    sendVoiceCall(phone, lead, "closing");
-  }, 60 * 60 * 1000);
+    if (funnel.stage !== "CLOSE") {
+      runFollowUp(user, lead, decision.next);
+    }
+  }, delay);
 }
 
 /* ===============================
    TELEGRAM COMMANDS
 =============================== */
 bot.setMyCommands([
-  { command: "start", description: "Start AI Sales Bot" },
+  { command: "start", description: "AI Call Center" },
   { command: "leads", description: "View leads" },
   { command: "add", description: "Generate lead" },
-  { command: "buy", description: "Buy lead" },
-  { command: "stats", description: "Stats" },
+  { command: "buy", description: "Purchase lead" },
+  { command: "stats", description: "Analytics" },
 ]);
 
 bot.onText(/\/start/, (msg) => {
@@ -269,9 +276,10 @@ bot.onText(/\/start/, (msg) => {
     msg.chat.id,
 `Welcome ${user.username}
 
-🚀 AI SALES AGENT ACTIVE
-Auto follow-ups enabled
-Voice + SMS closing system ready`
+🤖 AI CALL CENTER ACTIVE
+- SMS follow-ups
+- Voice AI calls
+- Automated closing system`
   );
 });
 
@@ -279,11 +287,11 @@ Voice + SMS closing system ready`
    LEADS
 =============================== */
 bot.onText(/\/leads/, (msg) => {
-  const leads = [...store.leads.values()]
+  const leads = [...db.leads.values()]
     .filter(l => l.status === "available")
     .slice(-10);
 
-  if (!leads.length) return sendTG(msg.chat.id, "No leads available");
+  if (!leads.length) return sendTG(msg.chat.id, "No leads");
 
   sendTG(
     msg.chat.id,
@@ -305,7 +313,7 @@ bot.onText(/\/add/, (msg) => {
     city: "Calgary",
     category: "roofing",
     price: 29,
-    score: 85,
+    score: 88,
   });
 
   sendTG(msg.chat.id, `Created: ${lead.id}`);
@@ -316,21 +324,20 @@ bot.onText(/\/add/, (msg) => {
 =============================== */
 bot.onText(/\/buy (.+)/, async (msg, match) => {
   const user = getUser(msg.from);
-  const leadId = match[1];
+  const lead = db.leads.get(match[1]);
 
-  const lead = store.leads.get(leadId);
   if (!lead) return sendTG(msg.chat.id, "Not found");
 
-  const locked = lockLead(leadId, user.id);
+  const locked = lockLead(lead.id, user.id);
   if (!locked) return sendTG(msg.chat.id, "Already taken");
 
-  const session = await createCheckout(lead, user.id);
+  const session = await checkout(lead, user.id);
 
-  sendTG(msg.chat.id, `💳 Pay here:\n${session.url}`);
+  sendTG(msg.chat.id, `💳 Pay:\n${session.url}`);
 });
 
 /* ===============================
-   STRIPE WEBHOOK (SALES + FOLLOWUP TRIGGER)
+   STRIPE WEBHOOK (TRIGGERS AI CALL CENTER)
 =============================== */
 app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (req, res) => {
   let event;
@@ -346,35 +353,31 @@ app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (re
   }
 
   if (event.type === "checkout.session.completed") {
-    const session = event.data.object;
-    const { leadId, userId } = session.metadata;
+    const { leadId, userId } = event.data.object.metadata;
 
-    const lead = store.leads.get(leadId);
-    const user = store.users.get(Number(userId));
+    const lead = db.leads.get(leadId);
+    const user = db.users.get(Number(userId));
 
-    if (lead) {
-      lead.status = "sold";
+    if (!lead || !user) return res.sendStatus(200);
 
-      const msg = `
-🔥 LEAD DELIVERED
+    lead.status = "sold";
+    user.totalDeals += 1;
+
+    sendTG(user.id, `
+🔥 DEAL CLOSED
 
 📍 ${lead.city}
 🏷 ${lead.category}
 ⭐ ${lead.score}
-      `.trim();
+    `.trim());
 
-      sendTG(Number(userId), msg);
+    if (user.phone) {
+      // immediate multi-channel delivery
+      await sendSMS(user.phone, "Deal closed. AI agent starting follow-up sequence.");
+      await sendVoice(user.phone, "Your AI sales assistant confirms your new lead purchase.");
 
-      if (user?.phone) {
-        // immediate SMS
-        await sendSMS(user.phone, msg);
-
-        // 🚀 AI FOLLOW-UP ENGINE STARTS HERE
-        scheduleFollowUps(userId, user.phone, lead);
-
-        // voice confirmation call
-        await sendVoiceCall(user.phone, lead, "followup");
-      }
+      // 🚀 START AI CALL CENTER FLOW
+      runFollowUp(user, lead, "FOLLOWUP_1");
     }
   }
 
@@ -385,16 +388,12 @@ app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (re
    STATS
 =============================== */
 bot.onText(/\/stats/, (msg) => {
-  const total = store.leads.size;
-  const sold = [...store.leads.values()].filter(l => l.status === "sold").length;
+  sendTG(msg.chat.id,
+`📊 AI CALL CENTER
 
-  sendTG(
-    msg.chat.id,
-`📊 AI SALES ENGINE
-
-Total Leads: ${total}
-Sold: ${sold}
-Revenue: $${sold * 29}`
+Leads: ${db.leads.size}
+Users: ${db.users.size}
+Funnels Active: ${db.funnels.size}`
   );
 });
 
@@ -403,10 +402,10 @@ Revenue: $${sold * 29}`
 =============================== */
 app.get("/health", (req, res) => {
   res.json({
-    status: "ok",
-    leads: store.leads.size,
-    users: store.users.size,
-    funnels: store.funnels.size,
+    status: "AI CALL CENTER ONLINE",
+    leads: db.leads.size,
+    users: db.users.size,
+    funnels: db.funnels.size,
   });
 });
 
@@ -414,5 +413,5 @@ app.get("/health", (req, res) => {
    START SERVER
 =============================== */
 app.listen(PORT, () => {
-  console.log(`🚀 AI SALES AGENT + FOLLOW-UP ENGINE RUNNING`);
+  console.log("🚀 AI CALL CENTER SaaS RUNNING");
 });
