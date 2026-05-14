@@ -1,42 +1,49 @@
-const FEATURES = {
-  starter: {
-    ai_scoring: true,
-    lead_export: false,
-    priority_routing: false,
-    api_access: false,
-  },
-
-  growth: {
-    ai_scoring: true,
-    lead_export: true,
-    priority_routing: true,
-    api_access: false,
-  },
-
-  elite: {
-    ai_scoring: true,
-    lead_export: true,
-    priority_routing: true,
-    api_access: true,
-  },
+const PLANS = {
+  starter: "starter",
+  growth: "growth",
+  elite: "elite",
 };
 
-/**
- * Check if a plan has a feature enabled
- */
-function hasFeature(plan, feature) {
-  return Boolean(FEATURES?.[plan]?.[feature]);
-}
+const FEATURES = {
+  ai_scoring: {
+    starter: true,
+    growth: true,
+    elite: true,
+  },
 
-/**
- * Get all features for a plan safely
- */
-function getFeatures(plan) {
-  return FEATURES?.[plan] || {};
-}
+  lead_export: {
+    starter: false,
+    growth: true,
+    elite: true,
+  },
 
-module.exports = {
-  FEATURES,
-  hasFeature,
-  getFeatures,
+  priority_routing: {
+    starter: false,
+    growth: true,
+    elite: true,
+  },
+
+  api_access: {
+    starter: false,
+    growth: false,
+    elite: true,
+  },
+
+  automation_engine: {
+    starter: false,
+    growth: true,
+    elite: true,
+  },
+
+  multi_workspace: {
+    starter: false,
+    growth: false,
+    elite: true,
+  },
+
+  webhook_access: {
+    starter: true,
+    growth: true,
+    elite: true,
+  },
 };
