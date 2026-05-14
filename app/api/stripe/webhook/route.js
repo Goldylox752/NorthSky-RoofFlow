@@ -3,7 +3,7 @@ const router = express.Router();
 const Stripe = require("stripe");
 const { createClient } = require("@supabase/supabase-js");
 const https = require("https");
-const logger = require("../lib/logger"); // IMPORTANT ADD
+const logger = require("../lib/logger");
 
 /* ===============================
    ENV SAFETY
@@ -16,6 +16,7 @@ const getEnv = (key) => {
 
 const stripe = new Stripe(getEnv("STRIPE_SECRET_KEY"), {
   apiVersion: "2024-06-20",
+  maxNetworkRetries: 3,
 });
 
 const supabase = createClient(
@@ -24,17 +25,17 @@ const supabase = createClient(
 );
 
 /* ===============================
-   TELEGRAM (SAFE FALLBACK)
+   TELEGRAM SENDER (SAFE + REUSABLE)
 =============================== */
-const sendTelegram = (text) => {
+function sendTelegram(text) {
   const token = process.env.TG_TOKEN;
   const chatId = process.env.TG_CHAT_ID;
+
   if (!token || !chatId) return;
 
   const payload = JSON.stringify({
     chat_id: chatId,
     text,
-    parse_mode: "Markdown",
   });
 
   const req = https.request(
@@ -42,81 +43,78 @@ const sendTelegram = (text) => {
       hostname: "api.telegram.org",
       path: `/bot${token}/sendMessage`,
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
     },
     () => {}
   );
 
-  req.on("error", () => {});
+  req.on("error", (err) => {
+    logger.errorLog(err, { context: "telegram_send" });
+  });
+
   req.write(payload);
   req.end();
-};
+}
 
 /* ===============================
-   IDEMPOTENCY CHECK
+   IDEMPOTENCY (STRONG GUARANTEE)
 =============================== */
 async function isProcessed(eventId) {
-  try {
-    const { data } = await supabase
-      .from("stripe_events")
-      .select("id")
-      .eq("id", eventId)
-      .maybeSingle();
+  const { data, error } = await supabase
+    .from("stripe_events")
+    .select("id")
+    .eq("id", eventId)
+    .maybeSingle();
 
-    return !!data;
-  } catch (err) {
-    logger.errorLog(err, { eventId });
-    return false; // fail open for Stripe retries
+  if (error) {
+    logger.errorLog(error, { eventId });
+    return false;
   }
+
+  return !!data;
 }
 
 async function markEvent(eventId, payload) {
-  try {
-    await supabase.from("stripe_events").upsert({
-      id: eventId,
-      ...payload,
-      updated_at: new Date().toISOString(),
-    });
-  } catch (err) {
-    logger.errorLog(err, { eventId });
+  const { error } = await supabase.from("stripe_events").upsert({
+    id: eventId,
+    ...payload,
+    updated_at: new Date().toISOString(),
+  });
+
+  if (error) {
+    logger.errorLog(error, { eventId });
   }
 }
 
 /* ===============================
-   CHECKOUT HANDLER
+   CORE: LEAD UNLOCK ENGINE
 =============================== */
-async function handleCheckout(session) {
-  const leadId = session.metadata?.leadId;
-  const plan = session.metadata?.plan;
-
-  if (!leadId || !plan) {
-    throw new Error("Missing Stripe metadata (leadId, plan)");
-  }
-
-  logger.stripe("checkout.session.completed", {
-    leadId,
-    plan,
-  });
-
+async function unlockLead(leadId, session) {
   const update = {
     paid: true,
-    status: "active",
-    plan: (plan || "starter").toLowerCase(),
+    status: "sold",
     stripe_customer_id: session.customer || null,
     customer_email: session.customer_details?.email || null,
     updated_at: new Date().toISOString(),
   };
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("leads")
     .update(update)
-    .eq("id", leadId);
+    .eq("id", leadId)
+    .select()
+    .single();
 
   if (error) throw error;
 
-  await supabase.from("payments").upsert({
+  return data;
+}
+
+/* ===============================
+   ORDER CREATION (SOURCE OF TRUTH)
+=============================== */
+async function createPaymentRecord(session, leadId) {
+  const { error } = await supabase.from("payments").upsert({
     id: session.id,
     lead_id: leadId,
     amount: (session.amount_total || 0) / 100,
@@ -125,7 +123,28 @@ async function handleCheckout(session) {
     created_at: new Date().toISOString(),
   });
 
-  sendTelegram(`Payment success\nLead: ${leadId}\nPlan: ${plan}`);
+  if (error) throw error;
+}
+
+/* ===============================
+   EVENT HANDLERS
+=============================== */
+async function handleCheckout(session) {
+  const leadId = session.metadata?.leadId;
+  const plan = session.metadata?.plan || "starter";
+
+  if (!leadId) {
+    throw new Error("Missing leadId in metadata");
+  }
+
+  logger.stripe("checkout.session.completed", { leadId, plan });
+
+  const lead = await unlockLead(leadId, session);
+  await createPaymentRecord(session, leadId);
+
+  sendTelegram(
+    `💰 PAYMENT SUCCESS\nLead: ${leadId}\nPlan: ${plan}\nCity: ${lead.city || "N/A"}`
+  );
 }
 
 /* ===============================
@@ -141,29 +160,28 @@ async function syncSubscription(sub) {
 
   const status = mapStatus(sub.status);
 
-  logger.stripe("subscription.updated", {
-    customerId,
-    plan,
-    status,
-  });
-
-  await supabase
+  const { error } = await supabase
     .from("users")
     .update({
-      plan: (plan || "starter").toLowerCase(),
+      plan: plan.toLowerCase(),
       status,
+      stripe_customer_id: customerId,
       updated_at: new Date().toISOString(),
     })
     .eq("stripe_customer_id", customerId);
+
+  if (error) {
+    logger.errorLog(error, { customerId });
+  }
+
+  logger.stripe("subscription.updated", { customerId, plan, status });
 }
 
 /* ===============================
    PAYMENT FAILED
 =============================== */
 async function handlePaymentFailed(invoice) {
-  logger.stripe("payment.failed", {
-    customer: invoice.customer,
-  });
+  const customer = invoice.customer;
 
   await supabase
     .from("users")
@@ -171,18 +189,16 @@ async function handlePaymentFailed(invoice) {
       status: "past_due",
       updated_at: new Date().toISOString(),
     })
-    .eq("stripe_customer_id", invoice.customer);
+    .eq("stripe_customer_id", customer);
 
-  sendTelegram(`Payment failed\nCustomer: ${invoice.customer}`);
+  sendTelegram(`⚠️ PAYMENT FAILED\nCustomer: ${customer}`);
 }
 
 /* ===============================
-   CANCEL
+   SUBSCRIPTION CANCELLED
 =============================== */
 async function handleCancel(sub) {
-  logger.stripe("subscription.canceled", {
-    customer: sub.customer,
-  });
+  const customer = sub.customer;
 
   await supabase
     .from("users")
@@ -191,45 +207,33 @@ async function handleCancel(sub) {
       plan: "starter",
       updated_at: new Date().toISOString(),
     })
-    .eq("stripe_customer_id", sub.customer);
+    .eq("stripe_customer_id", customer);
 
-  sendTelegram(`Subscription canceled\nCustomer: ${sub.customer}`);
+  sendTelegram(`❌ SUBSCRIPTION CANCELED\nCustomer: ${customer}`);
 }
 
 /* ===============================
-   PROCESSOR (SAFE WRAPPER)
+   EVENT ROUTER (CLEAN + SCALABLE)
 =============================== */
 async function processEvent(event) {
-  try {
-    logger.info(
-      { type: event.type, id: event.id },
-      "processing_stripe_event"
-    );
+  logger.info({ type: event.type, id: event.id }, "stripe_event");
 
-    switch (event.type) {
-      case "checkout.session.completed":
-        return await handleCheckout(event.data.object);
+  switch (event.type) {
+    case "checkout.session.completed":
+      return handleCheckout(event.data.object);
 
-      case "customer.subscription.created":
-      case "customer.subscription.updated":
-        return await syncSubscription(event.data.object);
+    case "customer.subscription.created":
+    case "customer.subscription.updated":
+      return syncSubscription(event.data.object);
 
-      case "invoice.payment_failed":
-        return await handlePaymentFailed(event.data.object);
+    case "invoice.payment_failed":
+      return handlePaymentFailed(event.data.object);
 
-      case "customer.subscription.deleted":
-        return await handleCancel(event.data.object);
+    case "customer.subscription.deleted":
+      return handleCancel(event.data.object);
 
-      default:
-        logger.warn({ type: event.type }, "unhandled_event");
-    }
-  } catch (err) {
-    logger.errorLog(err, {
-      eventType: event.type,
-      eventId: event.id,
-    });
-
-    throw err;
+    default:
+      logger.warn({ type: event.type }, "unhandled_event");
   }
 }
 
@@ -254,6 +258,7 @@ router.post(
         getEnv("STRIPE_WEBHOOK_SECRET")
       );
 
+      // IDEMPOTENCY CHECK
       if (await isProcessed(event.id)) {
         return res.json({ received: true, duplicate: true });
       }
@@ -284,7 +289,7 @@ router.post(
         });
       }
 
-      sendTelegram(`Webhook error\n${err.message}`);
+      sendTelegram(`🔥 WEBHOOK ERROR\n${err.message}`);
 
       return res.status(500).json({
         success: false,
