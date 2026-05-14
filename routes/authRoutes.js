@@ -3,20 +3,13 @@ const bcrypt = require("bcryptjs");
 const { createClient } = require("@supabase/supabase-js");
 const crypto = require("crypto");
 
-const {
-  signAccessToken,
-  signRefreshToken,
-} = require("../lib/jwt");
-
-const {
-  createSession,
-  deleteSession,
-} = require("../lib/session.store");
+const { signAccessToken, signRefreshToken } = require("../lib/jwt");
+const { createSession, deleteSession } = require("../lib/session.store");
 
 const router = express.Router();
 
 /* ===============================
-   SUPABASE
+   SUPABASE CLIENT
 =============================== */
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -27,92 +20,92 @@ const supabase = createClient(
    HELPERS
 =============================== */
 const normalizeEmail = (email) =>
-  email?.toLowerCase().trim() || null;
+  typeof email === "string" ? email.toLowerCase().trim() : null;
 
-const safeError = (res, code, message) =>
-  res.status(code).json({ success: false, error: message });
+const error = (res, status, code) =>
+  res.status(status).json({
+    success: false,
+    error: code,
+  });
 
 /* ===============================
    REGISTER
 =============================== */
 router.post("/register", async (req, res) => {
   try {
-    const email = normalizeEmail(req.body.email);
-    const password = req.body.password;
+    const email = normalizeEmail(req.body?.email);
+    const password = req.body?.password;
 
     if (!email || !password) {
-      return safeError(res, 400, "Missing credentials");
+      return error(res, 400, "missing_credentials");
     }
 
-    const { data: exists } = await supabase
+    const { data: existing } = await supabase
       .from("users")
       .select("id")
       .eq("email", email)
       .maybeSingle();
 
-    if (exists) {
-      return safeError(res, 409, "User already exists");
+    if (existing) {
+      return error(res, 409, "user_exists");
     }
 
-    const hashed = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    const { data, error } = await supabase
+    const { data, error: insertError } = await supabase
       .from("users")
       .insert({
         email,
-        password: hashed,
+        password: hashedPassword,
         role: "user",
         plan: "starter",
       })
       .select("id, email, role, plan")
       .single();
 
-    if (error) throw error;
+    if (insertError) throw insertError;
 
     return res.status(201).json({
       success: true,
       user: data,
     });
   } catch (err) {
-    console.error("REGISTER_ERROR:", err);
-    return safeError(res, 500, "Registration failed");
+    console.error("REGISTER_ERROR", err);
+    return error(res, 500, "registration_failed");
   }
 });
 
 /* ===============================
-   LOGIN (FULL SESSION SYSTEM)
+   LOGIN
 =============================== */
 router.post("/login", async (req, res) => {
   try {
-    const email = normalizeEmail(req.body.email);
-    const password = req.body.password;
+    const email = normalizeEmail(req.body?.email);
+    const password = req.body?.password;
 
     if (!email || !password) {
-      return safeError(res, 400, "Missing credentials");
+      return error(res, 400, "missing_credentials");
     }
 
-    const { data: user, error } = await supabase
+    const { data: user } = await supabase
       .from("users")
       .select("id, email, password, role, plan")
       .eq("email", email)
       .maybeSingle();
 
-    if (error || !user) {
-      return safeError(res, 401, "Invalid credentials");
+    if (!user) {
+      return error(res, 401, "invalid_credentials");
     }
 
-    const valid = await bcrypt.compare(password, user.password);
+    const passwordOk = await bcrypt.compare(password, user.password);
 
-    if (!valid) {
-      return safeError(res, 401, "Invalid credentials");
+    if (!passwordOk) {
+      return error(res, 401, "invalid_credentials");
     }
 
-    /* ===============================
-       SESSION ID (CRITICAL)
-    =============================== */
     const jti = crypto.randomUUID();
 
-    const payload = {
+    const tokenPayload = {
       id: user.id,
       email: user.email,
       role: user.role,
@@ -120,8 +113,8 @@ router.post("/login", async (req, res) => {
       jti,
     };
 
-    const accessToken = signAccessToken(payload);
-    const refreshToken = signRefreshToken(payload);
+    const accessToken = signAccessToken(tokenPayload);
+    const refreshToken = signRefreshToken(tokenPayload);
 
     await createSession(jti, {
       userId: user.id,
@@ -140,17 +133,17 @@ router.post("/login", async (req, res) => {
       },
     });
   } catch (err) {
-    console.error("LOGIN_ERROR:", err);
-    return safeError(res, 500, "Login failed");
+    console.error("LOGIN_ERROR", err);
+    return error(res, 500, "login_failed");
   }
 });
 
 /* ===============================
-   LOGOUT (REAL INVALIDATION)
+   LOGOUT
 =============================== */
 router.post("/logout", async (req, res) => {
   try {
-    const jti = req.body.jti;
+    const jti = req.body?.jti;
 
     if (jti) {
       await deleteSession(jti);
@@ -158,11 +151,11 @@ router.post("/logout", async (req, res) => {
 
     return res.json({
       success: true,
-      message: "Logged out",
+      message: "logged_out",
     });
   } catch (err) {
-    console.error("LOGOUT_ERROR:", err);
-    return safeError(res, 500, "Logout failed");
+    console.error("LOGOUT_ERROR", err);
+    return error(res, 500, "logout_failed");
   }
 });
 
