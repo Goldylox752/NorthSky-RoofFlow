@@ -8,65 +8,83 @@ const handleCheckoutCompleted = require("../services/stripe/handleCheckoutComple
 const handleSubscriptionUpdated = require("../services/stripe/handleSubscriptionUpdated");
 
 /* ===============================
-   WEBHOOK ROUTE (PRODUCTION SAFE)
+   STRIPE WEBHOOK ROUTE
+   - RAW BODY REQUIRED
+   - SIGNATURE VERIFICATION REQUIRED
+   - IDEMPOTENCY READY
 =============================== */
 router.post(
   "/",
   express.raw({ type: "application/json" }),
   async (req, res) => {
-    try {
-      const sig = req.headers["stripe-signature"];
+    const sig = req.headers["stripe-signature"];
 
-      const event = stripe.webhooks.constructEvent(
+    if (!sig) {
+      return res.status(400).json({
+        success: false,
+        error: "missing_signature",
+      });
+    }
+
+    let event;
+
+    try {
+      event = stripe.webhooks.constructEvent(
         req.body,
         sig,
         process.env.STRIPE_WEBHOOK_SECRET
       );
-
-      console.log("[Stripe Event]", event.type);
-
-      /* ===============================
-         IDEMPOTENCY SAFETY (IMPORTANT)
-      =============================== */
-      const eventId = event.id;
-
-      // OPTIONAL (recommended):
-      // store eventId in DB and skip if already processed
-
-      /* ===============================
-         EVENT ROUTER
-      =============================== */
-      switch (event.type) {
-
-        case "checkout.session.completed":
-          await handleCheckoutCompleted(event.data.object);
-          break;
-
-        case "invoice.paid":
-          await handleInvoicePaid(event.data.object);
-          break;
-
-        case "customer.subscription.updated":
-          await handleSubscriptionUpdated(event.data.object);
-          break;
-
-        case "customer.subscription.deleted":
-          await handleSubscriptionUpdated(event.data.object);
-          break;
-
-        default:
-          console.log("Unhandled event:", event.type);
-      }
-
-      return res.json({ received: true });
-
     } catch (err) {
-      console.error("Webhook error:", err);
+      console.error("Invalid Stripe signature:", err.message);
 
       return res.status(400).json({
         success: false,
-        error: "webhook_failed",
-        message: err.message,
+        error: "invalid_signature",
+      });
+    }
+
+    try {
+      console.log("Stripe event received:", event.type);
+
+      const eventId = event.id;
+      const data = event.data.object;
+
+      /*
+        Idempotency layer (recommended):
+        Store eventId in DB and skip if already processed
+      */
+
+      switch (event.type) {
+        case "checkout.session.completed":
+          await handleCheckoutCompleted(data);
+          break;
+
+        case "invoice.paid":
+          await handleInvoicePaid(data);
+          break;
+
+        case "customer.subscription.updated":
+          await handleSubscriptionUpdated(data);
+          break;
+
+        case "customer.subscription.deleted":
+          await handleSubscriptionUpdated(data);
+          break;
+
+        default:
+          console.log("Unhandled Stripe event:", event.type);
+      }
+
+      return res.json({
+        received: true,
+        eventId,
+      });
+    } catch (err) {
+      console.error("Webhook handler error:", err);
+
+      return res.status(500).json({
+        success: false,
+        error: "webhook_processing_failed",
       });
     }
   }
