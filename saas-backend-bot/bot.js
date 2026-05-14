@@ -44,13 +44,10 @@ const stripe = new Stripe(STRIPE_SECRET_KEY, {
 
 const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
 
-const twilioClient = twilio(
-  TWILIO_ACCOUNT_SID,
-  TWILIO_AUTH_TOKEN
-);
+const twilioClient = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
 
 /* ===============================
-   MEMORY STORE (MVP)
+   MEMORY STORE (MVP DB)
 =============================== */
 const store = {
   users: new Map(),
@@ -60,7 +57,7 @@ const store = {
 };
 
 /* ===============================
-   USER
+   USER SYSTEM
 =============================== */
 function getUser(tgUser) {
   const id = tgUser.id;
@@ -69,7 +66,7 @@ function getUser(tgUser) {
     store.users.set(id, {
       id,
       username: tgUser.username || "unknown",
-      phone: null, // optional future upgrade
+      phone: null,
       createdAt: Date.now(),
       purchases: 0,
     });
@@ -79,7 +76,32 @@ function getUser(tgUser) {
 }
 
 /* ===============================
-   LEADS
+   SAFE SEND HELPERS
+=============================== */
+function sendTG(chatId, text) {
+  try {
+    return bot.sendMessage(chatId, text);
+  } catch (err) {
+    console.error("Telegram error:", err.message);
+  }
+}
+
+async function sendSMS(phone, message) {
+  if (!phone) return;
+
+  try {
+    await twilioClient.messages.create({
+      body: message,
+      from: TWILIO_PHONE_NUMBER,
+      to: phone,
+    });
+  } catch (err) {
+    console.error("Twilio error:", err.message);
+  }
+}
+
+/* ===============================
+   LEAD ENGINE
 =============================== */
 function createLead(data) {
   const id = `lead_${Date.now()}`;
@@ -101,7 +123,7 @@ function createLead(data) {
 }
 
 /* ===============================
-   LOCK SYSTEM
+   LOCK SYSTEM (ANTI DOUBLE BUY)
 =============================== */
 function lockLead(leadId, userId) {
   const lead = store.leads.get(leadId);
@@ -118,23 +140,23 @@ function lockLead(leadId, userId) {
 }
 
 /* ===============================
-   BROADCAST
+   SALES BROADCAST ENGINE
 =============================== */
 function broadcastLead(lead) {
   const msg = `
-🔥 NEW LEAD
+🔥 NEW HIGH-CONVERTING LEAD
 
-📍 ${lead.city}
-🏷 ${lead.category}
-⭐ ${lead.score}
-💰 $${lead.price}
+📍 City: ${lead.city}
+🏷 Category: ${lead.category}
+⭐ Score: ${lead.score}/100
+💰 Price: $${lead.price}
 
-BUY:
+👉 Buy instantly:
 /buy ${lead.id}
   `.trim();
 
   for (const user of store.users.values()) {
-    bot.sendMessage(user.id, msg);
+    sendTG(user.id, msg);
   }
 }
 
@@ -150,8 +172,8 @@ async function createCheckout(lead, userId) {
         price_data: {
           currency: "usd",
           product_data: {
-            name: `Lead ${lead.city}`,
-            description: lead.category,
+            name: `Lead - ${lead.city}`,
+            description: `${lead.category} lead`,
           },
           unit_amount: lead.price * 100,
         },
@@ -168,45 +190,33 @@ async function createCheckout(lead, userId) {
 }
 
 /* ===============================
-   TWILIO SMS DELIVERY (NEW)
-=============================== */
-async function sendSMS(userPhone, message) {
-  if (!userPhone) return;
-
-  try {
-    await twilioClient.messages.create({
-      body: message,
-      from: TWILIO_PHONE_NUMBER,
-      to: userPhone,
-    });
-  } catch (err) {
-    console.error("Twilio error:", err.message);
-  }
-}
-
-/* ===============================
    TELEGRAM COMMANDS
 =============================== */
 bot.setMyCommands([
   { command: "start", description: "Start bot" },
   { command: "leads", description: "View leads" },
-  { command: "add", description: "Test lead" },
+  { command: "add", description: "Generate test lead" },
   { command: "buy", description: "Buy lead" },
+  { command: "stats", description: "Marketplace stats" },
 ]);
 
+/* ===============================
+   START
+=============================== */
 bot.onText(/\/start/, (msg) => {
   const user = getUser(msg.from);
 
-  bot.sendMessage(
+  sendTG(
     msg.chat.id,
 `Welcome ${user.username}
 
-🔥 Lead Marketplace Active`
+🚀 Lead Marketplace Active
+Use /leads to browse leads`
   );
 });
 
 /* ===============================
-   LEADS LIST
+   LIST LEADS
 =============================== */
 bot.onText(/\/leads/, (msg) => {
   const leads = [...store.leads.values()]
@@ -214,18 +224,22 @@ bot.onText(/\/leads/, (msg) => {
     .slice(-10);
 
   if (!leads.length) {
-    return bot.sendMessage(msg.chat.id, "No leads available");
+    return sendTG(msg.chat.id, "No leads available right now.");
   }
 
-  bot.sendMessage(
-    msg.chat.id,
-    leads.map(l =>
-`ID: ${l.id}
+  const text = leads
+    .map(
+      (l) => `
+ID: ${l.id}
 📍 ${l.city}
 🏷 ${l.category}
-💰 $${l.price}`
-    ).join("\n\n---\n")
-  );
+⭐ ${l.score}
+💰 $${l.price}
+`
+    )
+    .join("\n----------------\n");
+
+  sendTG(msg.chat.id, text);
 });
 
 /* ===============================
@@ -239,11 +253,11 @@ bot.onText(/\/add/, (msg) => {
     score: 85,
   });
 
-  bot.sendMessage(msg.chat.id, `Created ${lead.id}`);
+  sendTG(msg.chat.id, `Created lead:\n${lead.id}`);
 });
 
 /* ===============================
-   BUY FLOW
+   BUY FLOW (CORE REVENUE ENGINE)
 =============================== */
 bot.onText(/\/buy (.+)/, async (msg, match) => {
   const user = getUser(msg.from);
@@ -251,75 +265,98 @@ bot.onText(/\/buy (.+)/, async (msg, match) => {
 
   const lead = store.leads.get(leadId);
 
-  if (!lead) {
-    return bot.sendMessage(msg.chat.id, "Lead not found");
-  }
+  if (!lead) return sendTG(msg.chat.id, "Lead not found");
 
   const locked = lockLead(leadId, user.id);
 
-  if (!locked) {
-    return bot.sendMessage(msg.chat.id, "Already taken");
+  if (!locked) return sendTG(msg.chat.id, "Lead already taken");
+
+  try {
+    const session = await createCheckout(lead, user.id);
+
+    sendTG(msg.chat.id, `💳 Pay here:\n${session.url}`);
+  } catch (err) {
+    console.error(err);
+    sendTG(msg.chat.id, "Payment error occurred");
   }
-
-  const session = await createCheckout(lead, user.id);
-
-  bot.sendMessage(msg.chat.id, `Pay here:\n${session.url}`);
 });
 
 /* ===============================
-   STRIPE WEBHOOK + TWILIO DELIVERY
+   STATS (SAAS METRICS)
 =============================== */
-app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (req, res) => {
-  let event;
+bot.onText(/\/stats/, (msg) => {
+  const total = store.leads.size;
+  const sold = [...store.leads.values()].filter(l => l.status === "sold").length;
 
-  try {
-    event = stripe.webhooks.constructEvent(
-      req.body,
-      req.headers["stripe-signature"],
-      STRIPE_WEBHOOK_SECRET
-    );
-  } catch {
-    return res.sendStatus(400);
-  }
+  sendTG(
+    msg.chat.id,
+`📊 MARKETPLACE STATS
 
-  if (event.type === "checkout.session.completed") {
-    const session = event.data.object;
-    const { leadId, userId } = session.metadata;
+Total Leads: ${total}
+Sold: ${sold}
+Revenue Estimate: $${sold * 29}`
+  );
+});
 
-    const lead = store.leads.get(leadId);
+/* ===============================
+   STRIPE WEBHOOK (MONEY CONFIRMATION)
+=============================== */
+app.post(
+  "/stripe-webhook",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    let event;
 
-    if (lead) {
-      lead.status = "sold";
+    try {
+      event = stripe.webhooks.constructEvent(
+        req.body,
+        req.headers["stripe-signature"],
+        STRIPE_WEBHOOK_SECRET
+      );
+    } catch {
+      return res.sendStatus(400);
+    }
 
-      const user = store.users.get(Number(userId));
-      if (user) user.purchases += 1;
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object;
+      const { leadId, userId } = session.metadata;
 
-      const message = `
+      const lead = store.leads.get(leadId);
+
+      if (lead) {
+        lead.status = "sold";
+
+        const user = store.users.get(Number(userId));
+        if (user) user.purchases += 1;
+
+        const message = `
 🔥 LEAD DELIVERED
 
 📍 ${lead.city}
 🏷 ${lead.category}
 ⭐ ${lead.score}
-      `.trim();
+        `.trim();
 
-      // Telegram delivery
-      bot.sendMessage(Number(userId), message);
+        // Telegram delivery
+        sendTG(Number(userId), message);
 
-      // NEW: Twilio SMS delivery
-      if (user?.phone) {
-        await sendSMS(user.phone, message);
+        // Twilio SMS delivery (NEW SALES CHANNEL)
+        if (user?.phone) {
+          await sendSMS(user.phone, message);
+        }
       }
     }
-  }
 
-  res.sendStatus(200);
-});
+    res.sendStatus(200);
+  }
+);
 
 /* ===============================
-   HEALTH
+   HEALTH CHECK
 =============================== */
 app.get("/health", (req, res) => {
   res.json({
+    status: "ok",
     leads: store.leads.size,
     users: store.users.size,
     sold: [...store.leads.values()].filter(l => l.status === "sold").length,
@@ -327,8 +364,8 @@ app.get("/health", (req, res) => {
 });
 
 /* ===============================
-   START
+   START SERVER
 =============================== */
 app.listen(PORT, () => {
-  console.log(`🚀 Lead SaaS + Twilio running on ${PORT}`);
+  console.log(`🚀 Lead SaaS + Twilio + Stripe running on ${PORT}`);
 });
