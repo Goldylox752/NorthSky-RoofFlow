@@ -10,7 +10,6 @@ const supabase = require("./lib/supabase");
 =============================== */
 const {
   TELEGRAM_BOT_TOKEN,
-  WEBHOOK_URL,
   STRIPE_SECRET_KEY,
   STRIPE_PRICE_ID,
   STRIPE_WEBHOOK_SECRET,
@@ -19,30 +18,12 @@ const {
 } = process.env;
 
 /* ===============================
-   SAFE ENV CHECK (NO CRASH)
-=============================== */
-function warnMissing(name, value) {
-  if (!value) {
-    console.warn(`⚠️ Missing ENV: ${name}`);
-    return false;
-  }
-  return true;
-}
-
-const ENV_OK = {
-  TELEGRAM_BOT_TOKEN: warnMissing("TELEGRAM_BOT_TOKEN", TELEGRAM_BOT_TOKEN),
-  STRIPE_SECRET_KEY: warnMissing("STRIPE_SECRET_KEY", STRIPE_SECRET_KEY),
-  STRIPE_PRICE_ID: warnMissing("STRIPE_PRICE_ID", STRIPE_PRICE_ID),
-  CLIENT_URL: warnMissing("CLIENT_URL", CLIENT_URL),
-};
-
-/* ===============================
-   INIT APP (ALWAYS RUNS)
+   APP INIT
 =============================== */
 const app = express();
 
 /* ===============================
-   SERVICES (SAFE INIT)
+   SAFE SERVICE INIT
 =============================== */
 const stripe = STRIPE_SECRET_KEY
   ? new Stripe(STRIPE_SECRET_KEY, {
@@ -63,18 +44,19 @@ app.use("/stripe-webhook", express.raw({ type: "application/json" }));
 app.use(express.json({ limit: "1mb" }));
 
 /* ===============================
-   HELPERS
+   USER HELPERS
 =============================== */
 async function getOrCreateUser(tgUser) {
-  const { data } = await supabase
+  const { data: existing, error: findErr } = await supabase
     .from("users")
     .select("*")
     .eq("telegram_id", tgUser.id)
     .maybeSingle();
 
-  if (data) return data;
+  if (findErr) throw findErr;
+  if (existing) return existing;
 
-  const { data: created, error } = await supabase
+  const { data: created, error: createErr } = await supabase
     .from("users")
     .insert({
       telegram_id: tgUser.id,
@@ -86,41 +68,42 @@ async function getOrCreateUser(tgUser) {
     .select()
     .single();
 
-  if (error) throw error;
+  if (createErr) throw createErr;
 
   return created;
 }
 
-const isPro = (u) => u.plan === "pro";
+const isPro = (user) => user?.plan === "pro";
 
 /* ===============================
-   TELEGRAM SAFETY WRAPPER
+   TELEGRAM SAFE SEND
 =============================== */
 function send(chatId, text) {
-  if (!bot) return console.warn("Telegram bot not configured");
+  if (!bot) return;
   return bot.sendMessage(chatId, text);
 }
 
 /* ===============================
-   BOT COMMANDS
+   TELEGRAM COMMANDS
 =============================== */
 if (bot) {
   bot.setMyCommands([
     { command: "start", description: "Start bot" },
     { command: "plan", description: "View plan" },
     { command: "profile", description: "Profile" },
-    { command: "upgrade", description: "Upgrade to PRO" },
+    { command: "upgrade", description: "Upgrade" },
   ]);
 
   bot.onText(/\/start/, async (msg) => {
     const user = await getOrCreateUser(msg.from);
 
-    send(msg.chat.id, `Welcome @${user.username} — plan: ${user.plan}`);
+    send(msg.chat.id, `Welcome @${user.username}. Plan: ${user.plan}`);
 
     setTimeout(async () => {
       const latest = await getOrCreateUser(msg.from);
+
       if (!isPro(latest)) {
-        send(msg.chat.id, "Want faster access? Upgrade to PRO.");
+        send(msg.chat.id, "Upgrade to PRO for faster access.");
       }
     }, 30000);
   });
@@ -130,27 +113,22 @@ if (bot) {
 
     send(
       msg.chat.id,
-      `ID: ${user.telegram_id}\nUser: ${user.username}\nPlan: ${user.plan}`
+      `ID: ${user.telegram_id}\nUsername: ${user.username}\nPlan: ${user.plan}`
     );
   });
 
   bot.onText(/\/plan/, async (msg) => {
     const user = await getOrCreateUser(msg.from);
 
-    send(
-      msg.chat.id,
-      `PLAN: ${user.plan}\nFREE vs PRO features available.`
-    );
+    send(msg.chat.id, `Plan: ${user.plan}`);
   });
 
   bot.onText(/\/upgrade/, async (msg) => {
-    if (!stripe) return send(msg.chat.id, "Stripe not configured");
+    if (!stripe || !STRIPE_PRICE_ID || !CLIENT_URL) {
+      return send(msg.chat.id, "Payments not configured");
+    }
 
     const user = await getOrCreateUser(msg.from);
-
-    if (!STRIPE_PRICE_ID || !CLIENT_URL) {
-      return send(msg.chat.id, "Payment system not configured");
-    }
 
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
@@ -163,7 +141,7 @@ if (bot) {
       },
     });
 
-    send(msg.chat.id, `Pay here:\n${session.url}`);
+    send(msg.chat.id, `Payment link:\n${session.url}`);
   });
 }
 
@@ -171,7 +149,9 @@ if (bot) {
    STRIPE WEBHOOK
 =============================== */
 app.post("/stripe-webhook", async (req, res) => {
-  if (!stripe) return res.sendStatus(500);
+  if (!stripe || !STRIPE_WEBHOOK_SECRET) {
+    return res.sendStatus(500);
+  }
 
   let event;
 
@@ -198,20 +178,22 @@ app.post("/stripe-webhook", async (req, res) => {
       })
       .eq("telegram_id", telegramId);
 
-    send(telegramId, "🎉 PRO activated!");
+    send(telegramId, "PRO activated");
   }
 
   res.sendStatus(200);
 });
 
 /* ===============================
-   HEALTH CHECK (RENDER SAFE)
+   HEALTH CHECK
 =============================== */
 app.get("/health", (req, res) => {
   res.json({
     status: "ok",
-    telegram: !!bot,
-    stripe: !!stripe,
+    services: {
+      telegram: !!bot,
+      stripe: !!stripe,
+    },
     missingEnv: {
       TELEGRAM_BOT_TOKEN: !TELEGRAM_BOT_TOKEN,
       STRIPE_SECRET_KEY: !STRIPE_SECRET_KEY,
@@ -225,5 +207,5 @@ app.get("/health", (req, res) => {
    START SERVER
 =============================== */
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
