@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
   Area,
@@ -25,7 +25,7 @@ const TELEGRAM_BOT =
   process.env.NEXT_PUBLIC_TELEGRAM_BOT_URL ?? "#";
 
 /* ===============================
-   ANIMATION (optimized)
+   ANIMATION
 =============================== */
 const fadeUp = {
   hidden: { opacity: 0, y: 16 },
@@ -35,9 +35,7 @@ const fadeUp = {
 const stagger = {
   hidden: {},
   show: {
-    transition: {
-      staggerChildren: 0.06,
-    },
+    transition: { staggerChildren: 0.06 },
   },
 };
 
@@ -46,11 +44,7 @@ const stagger = {
 =============================== */
 export default function HomePage() {
   const router = useRouter();
-
-  const go = (plan: string) => {
-    if (!plan) return;
-    router.push(`/checkout?plan=${encodeURIComponent(plan)}`);
-  };
+  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
 
   const revenueData = useMemo(
     () => [
@@ -76,13 +70,44 @@ export default function HomePage() {
     []
   );
 
+  /* ===============================
+     STRIPE CHECKOUT (REAL FLOW)
+  =============================== */
+  const go = useCallback(async (plan: string) => {
+    if (!plan) return;
+
+    try {
+      setLoadingPlan(plan);
+
+      const res = await fetch("/api/checkout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ plan }),
+      });
+
+      const data = await res.json();
+
+      if (data?.url) {
+        window.location.href = data.url;
+      } else {
+        console.error("No checkout URL returned");
+      }
+    } catch (err) {
+      console.error("Checkout error:", err);
+    } finally {
+      setLoadingPlan(null);
+    }
+  }, []);
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-black text-white">
       <Background />
 
       <Navbar />
 
-      <Hero go={go} />
+      <Hero go={go} loadingPlan={loadingPlan} />
 
       <Stats />
 
@@ -90,7 +115,7 @@ export default function HomePage() {
 
       <Features />
 
-      <Pricing go={go} />
+      <Pricing go={go} loadingPlan={loadingPlan} />
 
       <Operations />
 
@@ -146,7 +171,13 @@ function Navbar() {
 /* ===============================
    HERO
 =============================== */
-function Hero({ go }: { go: (plan: string) => void }) {
+function Hero({
+  go,
+  loadingPlan,
+}: {
+  go: (plan: string) => void;
+  loadingPlan: string | null;
+}) {
   return (
     <motion.section
       initial="hidden"
@@ -169,7 +200,9 @@ function Hero({ go }: { go: (plan: string) => void }) {
         </p>
 
         <div className="mt-10 flex gap-4">
-          <Button onClick={() => go("growth")}>Launch</Button>
+          <Button onClick={() => go("growth")}>
+            {loadingPlan === "growth" ? "Loading..." : "Launch"}
+          </Button>
 
           <a href={TELEGRAM_BOT} target="_blank" rel="noreferrer">
             <Button variant="outline">Telegram</Button>
@@ -235,7 +268,6 @@ function Analytics({
   return (
     <section className="mx-auto max-w-7xl px-6 py-28">
       <h2 className="text-4xl font-semibold">Analytics</h2>
-      <p className="mt-3 text-zinc-400">Live revenue + lead tracking</p>
 
       <div className="mt-10 grid gap-6 md:grid-cols-2">
         <ChartCard title="Revenue">
@@ -258,7 +290,7 @@ function ChartCard({
   children: React.ReactNode;
 }) {
   return (
-    <Card className="bg-white/5 p-6 border border-white/10 backdrop-blur-2xl">
+    <Card className="bg-white/5 p-6 border border-white/10">
       <h3>{title}</h3>
       {children}
     </Card>
@@ -282,10 +314,7 @@ function Features() {
     <section id="features" className="mx-auto max-w-7xl px-6 py-28">
       <div className="grid gap-6 md:grid-cols-3">
         {items.map((i) => (
-          <Card
-            key={i}
-            className="border border-white/10 bg-white/5 p-6 hover:scale-[1.03] transition"
-          >
+          <Card key={i} className="bg-white/5 p-6 border border-white/10">
             {i}
           </Card>
         ))}
@@ -295,21 +324,24 @@ function Features() {
 }
 
 /* ===============================
-   PRICING
+   PRICING (STRIPE READY)
 =============================== */
-function Pricing({ go }: { go: (plan: string) => void }) {
+function Pricing({
+  go,
+  loadingPlan,
+}: {
+  go: (plan: string) => void;
+  loadingPlan: string | null;
+}) {
   return (
     <section id="pricing" className="mx-auto max-w-7xl px-6 py-28">
       <div className="grid gap-6 md:grid-cols-3">
         {["starter", "growth", "elite"].map((p) => (
-          <Card
-            key={p}
-            className="bg-white/5 p-6 border border-white/10"
-          >
+          <Card key={p} className="bg-white/5 p-6 border border-white/10">
             <h3 className="capitalize">{p}</h3>
 
             <Button className="mt-6 w-full" onClick={() => go(p)}>
-              Upgrade
+              {loadingPlan === p ? "Redirecting..." : "Upgrade"}
             </Button>
           </Card>
         ))}
@@ -319,18 +351,8 @@ function Pricing({ go }: { go: (plan: string) => void }) {
 }
 
 /* ===============================
-   OPS + CTA + FOOTER (unchanged style)
+   CTA / FOOTER / HELPERS
 =============================== */
-function Operations() {
-  return (
-    <section className="mx-auto max-w-7xl px-6 py-28">
-      <Card className="bg-white/5 p-8 border border-white/10">
-        <h2>System Status</h2>
-      </Card>
-    </section>
-  );
-}
-
 function CTA({ go }: { go: (plan: string) => void }) {
   return (
     <section className="text-center py-28">
@@ -350,9 +372,6 @@ function Footer() {
   );
 }
 
-/* ===============================
-   HELPERS
-=============================== */
 function Metric({ title, value }: { title: string; value: string }) {
   return (
     <div className="flex justify-between text-sm">
