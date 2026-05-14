@@ -10,7 +10,6 @@ const Stripe = require("stripe");
 const REQUIRED_ENV = [
   "TELEGRAM_BOT_TOKEN",
   "STRIPE_SECRET_KEY",
-  "STRIPE_PRICE_ID",
   "CLIENT_URL",
 ];
 
@@ -23,14 +22,13 @@ for (const key of REQUIRED_ENV) {
 const {
   TELEGRAM_BOT_TOKEN,
   STRIPE_SECRET_KEY,
-  STRIPE_PRICE_ID,
   STRIPE_WEBHOOK_SECRET,
   CLIENT_URL,
   PORT = 3000,
 } = process.env;
 
 /* ===============================
-   APP + SERVICES
+   INIT
 =============================== */
 const app = express();
 
@@ -49,16 +47,17 @@ app.use("/stripe-webhook", express.raw({ type: "application/json" }));
 app.use(express.json({ limit: "1mb" }));
 
 /* ===============================
-   MEMORY STORE (MVP)
+   LEAD MARKET DATABASE (MVP MEMORY)
 =============================== */
 const store = {
   users: new Map(),
-  timers: new Map(),
+  leads: new Map(),
+  purchases: new Map(),
   state: new Map(),
 };
 
 /* ===============================
-   USER CORE
+   USER
 =============================== */
 function getUser(tgUser) {
   const id = tgUser.id;
@@ -67,196 +66,155 @@ function getUser(tgUser) {
     store.users.set(id, {
       id,
       username: tgUser.username || "unknown",
-      plan: "free",
-      stripeSessionId: null,
       createdAt: Date.now(),
-      lastActive: Date.now(),
     });
   }
 
-  const user = store.users.get(id);
-  user.lastActive = Date.now();
-
-  return user;
+  return store.users.get(id);
 }
 
-const isPro = (u) => u?.plan === "pro";
-
 /* ===============================
-   HELPERS
+   LEADS CORE
 =============================== */
-function setState(id, value) {
-  store.state.set(id, value);
+function createLead(data) {
+  const id = `lead_${Date.now()}`;
+
+  const lead = {
+    id,
+    name: data.name,
+    phone: data.phone,
+    city: data.city,
+    category: data.category || "general",
+    price: data.price || 25,
+    score: data.score || 50,
+    status: "available",
+    createdAt: Date.now(),
+  };
+
+  store.leads.set(id, lead);
+
+  broadcastLead(lead);
+
+  return lead;
 }
 
-function clearTimer(id) {
-  const t = store.timers.get(id);
-  if (t) clearTimeout(t);
-  store.timers.delete(id);
-}
+function broadcastLead(lead) {
+  const text =
+`NEW LEAD AVAILABLE
 
-function send(chatId, text) {
-  return bot.sendMessage(chatId, text);
+Category: ${lead.category}
+City: ${lead.city}
+Score: ${lead.score}
+Price: $${lead.price}
+
+BUY:
+${CLIENT_URL}/buy/${lead.id}`;
+
+  // broadcast to all users (MVP)
+  for (const user of store.users.values()) {
+    bot.sendMessage(user.id, text);
+  }
 }
 
 /* ===============================
-   SALES ENGINE (CONVERSION MESSAGE)
+   BUY FLOW
 =============================== */
-function salesMessage(user) {
-  return `
-ACCESS READY
+async function createCheckout(leadId, userId) {
+  const lead = store.leads.get(leadId);
 
-Hi @${user.username}
+  if (!lead || lead.status !== "available") {
+    throw new Error("Lead not available");
+  }
 
-Current plan: FREE
+  const session = await stripe.checkout.sessions.create({
+    mode: "payment",
+    payment_method_types: ["card"],
+    line_items: [
+      {
+        price_data: {
+          currency: "usd",
+          product_data: {
+            name: `Lead: ${lead.category}`,
+          },
+          unit_amount: lead.price * 100,
+        },
+        quantity: 1,
+      },
+    ],
+    metadata: {
+      leadId,
+      userId: String(userId),
+    },
+    success_url: `${CLIENT_URL}/success`,
+    cancel_url: `${CLIENT_URL}/cancel`,
+  });
 
-FREE:
-- Limited access
-- Slower processing
-- Lower priority
-
-PRO — $19/month
-
-BENEFITS:
-- Priority access
-- Faster results
-- Higher conversion rate
-
-Upgrade:
-${CLIENT_URL}/checkout?plan=pro
-`;
+  return session;
 }
 
 /* ===============================
-   BOT MENU
+   TELEGRAM COMMANDS
 =============================== */
 bot.setMyCommands([
-  { command: "start", description: "Start bot" },
-  { command: "plan", description: "View plan" },
-  { command: "profile", description: "Profile" },
-  { command: "upgrade", description: "Upgrade" },
+  { command: "start", description: "Start" },
+  { command: "leads", description: "View leads" },
+  { command: "addlead", description: "Add test lead" },
 ]);
 
-/* ===============================
-   START FLOW (FUNNEL)
-=============================== */
 bot.onText(/\/start/, (msg) => {
   const user = getUser(msg.from);
 
-  setState(user.id, "started");
-
-  send(msg.chat.id, salesMessage(user));
-
-  clearTimer(user.id);
-
-  // follow-up 1
-  store.timers.set(
-    user.id,
-    setTimeout(() => {
-      const latest = store.users.get(user.id);
-      if (!isPro(latest)) {
-        send(msg.chat.id, "Quick question: want faster access?");
-      }
-    }, 30000)
-  );
-
-  // follow-up 2
-  store.timers.set(
-    user.id,
-    setTimeout(() => {
-      const latest = store.users.get(user.id);
-      if (!isPro(latest)) {
-        send(msg.chat.id, `${CLIENT_URL}/checkout?plan=pro`);
-      }
-    }, 180000)
-  );
-});
-
-/* ===============================
-   PLAN
-=============================== */
-bot.onText(/\/plan/, (msg) => {
-  const user = getUser(msg.from);
-
-  send(
+  bot.sendMessage(
     msg.chat.id,
-    `PLAN: ${user.plan.toUpperCase()}
+    `Welcome ${user.username}
 
-FREE:
-- Basic access
-
-PRO:
-- Priority processing`
+This is a Lead Marketplace.
+You can buy verified leads instantly.`
   );
 });
 
 /* ===============================
-   PROFILE
+   LIST LEADS
 =============================== */
-bot.onText(/\/profile/, (msg) => {
-  const user = getUser(msg.from);
+bot.onText(/\/leads/, (msg) => {
+  const leads = Array.from(store.leads.values())
+    .filter(l => l.status === "available")
+    .slice(-10);
 
-  send(
-    msg.chat.id,
-    `PROFILE
-ID: ${user.id}
-Username: ${user.username}
-Plan: ${user.plan}`
-  );
-});
-
-/* ===============================
-   UPGRADE (STRIPE CHECKOUT)
-=============================== */
-bot.onText(/\/upgrade/, async (msg) => {
-  const user = getUser(msg.from);
-
-  if (isPro(user)) {
-    return send(msg.chat.id, "Already on PRO");
+  if (!leads.length) {
+    return bot.sendMessage(msg.chat.id, "No leads available");
   }
 
-  setState(user.id, "checkout_started");
+  const text = leads.map(l =>
+`ID: ${l.id}
+City: ${l.city}
+Score: ${l.score}
+Price: $${l.price}
+`).join("\n----------------\n");
 
-  try {
-    const session = await stripe.checkout.sessions.create({
-      mode: "subscription",
-      payment_method_types: ["card"],
-      line_items: [{ price: STRIPE_PRICE_ID, quantity: 1 }],
-      success_url: `${CLIENT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${CLIENT_URL}/cancel`,
-      metadata: {
-        telegramId: String(user.id),
-      },
-    });
+  bot.sendMessage(msg.chat.id, text);
+});
 
-    user.stripeSessionId = session.id;
+/* ===============================
+   ADD TEST LEAD (MVP ONLY)
+=============================== */
+bot.onText(/\/addlead/, (msg) => {
+  const lead = createLead({
+    name: "Test Customer",
+    phone: "hidden",
+    city: "Calgary",
+    category: "roofing",
+    price: 29,
+    score: 82,
+  });
 
-    send(msg.chat.id, `Complete payment:\n${session.url}`);
-
-    clearTimer(user.id);
-
-    // abandoned checkout follow-up
-    store.timers.set(
-      user.id,
-      setTimeout(() => {
-        const latest = store.users.get(user.id);
-        if (!isPro(latest)) {
-          send(msg.chat.id, `Reminder:\n${session.url}`);
-        }
-      }, 600000)
-    );
-  } catch (err) {
-    console.error("Stripe error:", err);
-    send(msg.chat.id, "Payment error occurred");
-  }
+  bot.sendMessage(msg.chat.id, `Lead created: ${lead.id}`);
 });
 
 /* ===============================
    STRIPE WEBHOOK
 =============================== */
 app.post("/stripe-webhook", (req, res) => {
-  if (!STRIPE_WEBHOOK_SECRET) return res.sendStatus(500);
-
   let event;
 
   try {
@@ -271,17 +229,27 @@ app.post("/stripe-webhook", (req, res) => {
 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object;
-    const userId = Number(session.metadata.telegramId);
 
-    const user = store.users.get(userId);
+    const { leadId, userId } = session.metadata;
 
-    if (user) {
-      user.plan = "pro";
-      setState(userId, "pro");
+    const lead = store.leads.get(leadId);
 
-      clearTimer(userId);
+    if (lead && lead.status === "available") {
+      lead.status = "sold";
 
-      send(userId, "Payment confirmed. PRO activated.");
+      store.purchases.set(leadId, {
+        leadId,
+        userId,
+        purchasedAt: Date.now(),
+      });
+
+      bot.sendMessage(
+        Number(userId),
+        `Lead unlocked:
+
+${lead.city} - ${lead.category}
+Phone: hidden (unlock logic later)`
+      );
     }
   }
 
@@ -289,35 +257,20 @@ app.post("/stripe-webhook", (req, res) => {
 });
 
 /* ===============================
-   TELEGRAM WEBHOOK
-=============================== */
-app.post("/telegram-webhook", (req, res) => {
-  try {
-    bot.processUpdate(req.body);
-    res.sendStatus(200);
-  } catch (err) {
-    console.error(err);
-    res.sendStatus(500);
-  }
-});
-
-/* ===============================
    HEALTH CHECK
 =============================== */
 app.get("/health", (req, res) => {
-  const users = Array.from(store.users.values());
-
   res.json({
     status: "ok",
-    totalUsers: users.length,
-    proUsers: users.filter((u) => u.plan === "pro").length,
-    uptime: process.uptime(),
+    leads: store.leads.size,
+    users: store.users.size,
+    sold: Array.from(store.leads.values()).filter(l => l.status === "sold").length,
   });
 });
 
 /* ===============================
-   START SERVER
+   START
 =============================== */
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Lead Marketplace running on port ${PORT}`);
 });
