@@ -6,7 +6,7 @@ const Stripe = require("stripe");
 const twilio = require("twilio");
 
 /* ===============================
-   ENV SAFETY
+   ENV VALIDATION
 =============================== */
 const REQUIRED = [
   "TELEGRAM_BOT_TOKEN",
@@ -17,9 +17,9 @@ const REQUIRED = [
   "TWILIO_PHONE_NUMBER",
 ];
 
-for (const key of REQUIRED) {
+REQUIRED.forEach((key) => {
   if (!process.env[key]) throw new Error(`Missing env: ${key}`);
-}
+});
 
 const {
   TELEGRAM_BOT_TOKEN,
@@ -44,13 +44,10 @@ const stripe = new Stripe(STRIPE_SECRET_KEY, {
 
 const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
 
-const twilioClient = twilio(
-  TWILIO_ACCOUNT_SID,
-  TWILIO_AUTH_TOKEN
-);
+const twilioClient = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
 
 /* ===============================
-   MEMORY STORE (MVP DATABASE)
+   MEMORY DB (MVP)
 =============================== */
 const store = {
   users: new Map(),
@@ -78,16 +75,19 @@ function getUser(tgUser) {
 }
 
 /* ===============================
-   SAFE SEND HELPERS
+   SAFE MESSAGING
 =============================== */
 function sendTG(chatId, text) {
   try {
     return bot.sendMessage(chatId, text);
-  } catch (e) {
-    console.error("Telegram error:", e.message);
+  } catch (err) {
+    console.error("Telegram error:", err.message);
   }
 }
 
+/* ===============================
+   SMS ENGINE (TWILIO)
+=============================== */
 async function sendSMS(phone, message) {
   if (!phone) return;
 
@@ -97,13 +97,13 @@ async function sendSMS(phone, message) {
       from: TWILIO_PHONE_NUMBER,
       to: phone,
     });
-  } catch (e) {
-    console.error("SMS error:", e.message);
+  } catch (err) {
+    console.error("SMS error:", err.message);
   }
 }
 
 /* ===============================
-   📞 VOICE CALL ENGINE
+   VOICE CALL ENGINE (TWILIO)
 =============================== */
 async function sendVoiceCall(phone, lead) {
   if (!phone) return;
@@ -115,16 +115,16 @@ async function sendVoiceCall(phone, lead) {
       twiml: `
         <Response>
           <Say voice="alice">
-            Hello. This is your automated sales system.
-            You just purchased a ${lead.category} lead in ${lead.city}.
-            Score is ${lead.score} out of 100.
-            Please check your Telegram or dashboard for full details.
+            Hello. This is your automated sales assistant.
+            You just received a ${lead.category} lead in ${lead.city}.
+            Score is ${lead.score}.
+            Please check your Telegram for full details and payment confirmation.
           </Say>
         </Response>
       `,
     });
-  } catch (e) {
-    console.error("Voice call error:", e.message);
+  } catch (err) {
+    console.error("Voice call error:", err.message);
   }
 }
 
@@ -151,7 +151,7 @@ function createLead(data) {
 }
 
 /* ===============================
-   LEAD LOCK SYSTEM
+   LOCK SYSTEM
 =============================== */
 function lockLead(leadId, userId) {
   const lead = store.leads.get(leadId);
@@ -173,10 +173,10 @@ function broadcastLead(lead) {
   const msg = `
 🔥 NEW HIGH-CONVERTING LEAD
 
-📍 City: ${lead.city}
-🏷 Category: ${lead.category}
-⭐ Score: ${lead.score}
-💰 Price: $${lead.price}
+📍 ${lead.city}
+🏷 ${lead.category}
+⭐ ${lead.score}/100
+💰 $${lead.price}
 
 /buy ${lead.id}
   `.trim();
@@ -219,20 +219,25 @@ async function createCheckout(lead, userId) {
    TELEGRAM COMMANDS
 =============================== */
 bot.setMyCommands([
-  { command: "start", description: "Start" },
+  { command: "start", description: "Start sales bot" },
   { command: "leads", description: "View leads" },
-  { command: "add", description: "Test lead" },
+  { command: "add", description: "Generate lead" },
   { command: "buy", description: "Buy lead" },
-  { command: "stats", description: "Stats" },
+  { command: "stats", description: "Sales stats" },
 ]);
 
+/* ===============================
+   START
+=============================== */
 bot.onText(/\/start/, (msg) => {
   const user = getUser(msg.from);
 
-  sendTG(msg.chat.id,
+  sendTG(
+    msg.chat.id,
 `Welcome ${user.username}
 
-🚀 AI Sales Marketplace Active`
+🚀 AI Sales Marketplace Active
+Ready to close deals.`
   );
 });
 
@@ -246,7 +251,8 @@ bot.onText(/\/leads/, (msg) => {
 
   if (!leads.length) return sendTG(msg.chat.id, "No leads available");
 
-  sendTG(msg.chat.id,
+  sendTG(
+    msg.chat.id,
     leads.map(l =>
 `ID: ${l.id}
 📍 ${l.city}
@@ -268,7 +274,7 @@ bot.onText(/\/add/, (msg) => {
     score: 85,
   });
 
-  sendTG(msg.chat.id, `Created: ${lead.id}`);
+  sendTG(msg.chat.id, `Created lead: ${lead.id}`);
 });
 
 /* ===============================
@@ -279,18 +285,18 @@ bot.onText(/\/buy (.+)/, async (msg, match) => {
   const leadId = match[1];
 
   const lead = store.leads.get(leadId);
-  if (!lead) return sendTG(msg.chat.id, "Not found");
+  if (!lead) return sendTG(msg.chat.id, "Lead not found");
 
   const locked = lockLead(leadId, user.id);
   if (!locked) return sendTG(msg.chat.id, "Already taken");
 
   const session = await createCheckout(lead, user.id);
 
-  sendTG(msg.chat.id, `💳 Pay here:\n${session.url}`);
+  sendTG(msg.chat.id, `💳 Complete payment:\n${session.url}`);
 });
 
 /* ===============================
-   STRIPE WEBHOOK + SMS + VOICE
+   STRIPE WEBHOOK (FULL DELIVERY SYSTEM)
 =============================== */
 app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (req, res) => {
   let event;
@@ -315,7 +321,7 @@ app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (re
     if (lead) {
       lead.status = "sold";
 
-      const msg = `
+      const message = `
 🔥 LEAD DELIVERED
 
 📍 ${lead.city}
@@ -323,12 +329,10 @@ app.post("/stripe-webhook", express.raw({ type: "application/json" }), async (re
 ⭐ ${lead.score}
       `.trim();
 
-      sendTG(Number(userId), msg);
+      sendTG(Number(userId), message);
 
       if (user?.phone) {
-        await sendSMS(user.phone, msg);
-
-        // 📞 VOICE CALL (AUTOMATED CLOSING TOUCH)
+        await sendSMS(user.phone, message);
         await sendVoiceCall(user.phone, lead);
       }
     }
@@ -344,28 +348,31 @@ bot.onText(/\/stats/, (msg) => {
   const total = store.leads.size;
   const sold = [...store.leads.values()].filter(l => l.status === "sold").length;
 
-  sendTG(msg.chat.id,
-`📊 STATS
+  sendTG(
+    msg.chat.id,
+`📊 SALES STATS
 
-Total: ${total}
+Total Leads: ${total}
 Sold: ${sold}
 Revenue: $${sold * 29}`
   );
 });
 
 /* ===============================
-   HEALTH
+   HEALTH CHECK
 =============================== */
 app.get("/health", (req, res) => {
   res.json({
+    status: "ok",
     leads: store.leads.size,
     users: store.users.size,
+    sold: [...store.leads.values()].filter(l => l.status === "sold").length,
   });
 });
 
 /* ===============================
-   START
+   START SERVER
 =============================== */
 app.listen(PORT, () => {
-  console.log(`🚀 AI Sales SaaS + Voice + SMS running on ${PORT}`);
+  console.log(`🚀 AI Sales SaaS + SMS + Voice running on ${PORT}`);
 });
