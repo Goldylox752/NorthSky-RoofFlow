@@ -1,6 +1,18 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import {
+  Area,
+  AreaChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Bar,
+  BarChart,
+} from "recharts";
+
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
@@ -9,23 +21,59 @@ import { Card } from "@/components/ui/card";
 =============================== */
 const TELEGRAM_BOT = "https://t.me/YOUR_BOT_USERNAME";
 
+/* ===============================
+   CHART DATA
+=============================== */
+const revenueData = [
+  { month: "Jan", revenue: 12000 },
+  { month: "Feb", revenue: 18000 },
+  { month: "Mar", revenue: 22000 },
+  { month: "Apr", revenue: 31000 },
+  { month: "May", revenue: 48220 },
+];
+
+const leadData = [
+  { name: "Mon", leads: 120 },
+  { name: "Tue", leads: 180 },
+  { name: "Wed", leads: 240 },
+  { name: "Thu", leads: 210 },
+  { name: "Fri", leads: 320 },
+  { name: "Sat", leads: 280 },
+  { name: "Sun", leads: 340 },
+];
+
 export default function HomePage() {
   const router = useRouter();
 
-  const go = (plan) => {
+  const go = (plan: string) => {
     router.push(`/checkout?plan=${plan}`);
   };
 
   return (
-    <main className="min-h-screen bg-background text-foreground overflow-hidden">
+    <main className="relative min-h-screen overflow-hidden bg-black text-white">
+      {/* GLOBAL LIGHTING */}
+      <div className="absolute inset-0 -z-50 bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.25),transparent_35%),radial-gradient(circle_at_bottom_right,rgba(168,85,247,0.18),transparent_30%)]" />
+
+      <div className="absolute inset-0 -z-40 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.02),transparent)]" />
+
       <Navbar />
+
       <Hero go={go} />
+
       <Stats />
+
+      <AnalyticsPreview />
+
       <Features />
+
       <Pricing go={go} />
-      <DashboardPreview />
+
+      <OperationsPanel />
+
       <CTA go={go} />
+
       <Footer />
+
       <TelegramFloat />
     </main>
   );
@@ -36,34 +84,43 @@ export default function HomePage() {
 =============================== */
 function Navbar() {
   return (
-    <header className="sticky top-0 z-50 border-b border-border/40 bg-background/80 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+    <header className="sticky top-0 z-50 border-b border-white/10 bg-black/40 backdrop-blur-2xl">
+      <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
         <div>
-          <h1 className="text-lg font-semibold tracking-tight">
+          <h1 className="text-xl font-semibold tracking-tight">
             NorthSky
           </h1>
 
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-zinc-400">
             Automation Infrastructure
           </p>
         </div>
 
-        <nav className="hidden items-center gap-8 text-sm md:flex">
-          <a href="#features" className="text-muted-foreground hover:text-foreground">
+        <nav className="hidden items-center gap-8 md:flex">
+          <a
+            href="#features"
+            className="text-sm text-zinc-400 transition hover:text-white"
+          >
             Features
           </a>
 
-          <a href="#pricing" className="text-muted-foreground hover:text-foreground">
+          <a
+            href="#pricing"
+            className="text-sm text-zinc-400 transition hover:text-white"
+          >
             Pricing
           </a>
 
           <a href={TELEGRAM_BOT} target="_blank">
-            <Button variant="outline" size="sm">
+            <Button
+              variant="outline"
+              className="border-white/20 bg-white/5 backdrop-blur-xl"
+            >
               Telegram Bot
             </Button>
           </a>
 
-          <Button size="sm">
+          <Button className="bg-white text-black hover:bg-zinc-200">
             Dashboard
           </Button>
         </nav>
@@ -75,106 +132,129 @@ function Navbar() {
 /* ===============================
    HERO
 =============================== */
-function Hero({ go }) {
+function Hero({ go }: any) {
   return (
     <section className="relative">
-      <div className="absolute inset-0 -z-10 bg-gradient-to-b from-indigo-500/10 via-background to-background" />
-
-      <div className="mx-auto grid max-w-7xl items-center gap-20 px-6 py-28 md:grid-cols-2">
+      <div className="mx-auto grid max-w-7xl items-center gap-20 px-6 py-32 md:grid-cols-2">
         <div>
-          <div className="inline-flex items-center rounded-full border px-4 py-2 text-xs text-muted-foreground">
-            Telegram + SaaS Infrastructure
+          <div className="inline-flex items-center rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs text-zinc-300 backdrop-blur-xl">
+            Telegram + Stripe + SaaS Automation
           </div>
 
-          <h1 className="mt-8 text-5xl font-semibold leading-tight tracking-tight md:text-7xl">
-            Automate your
+          <h1 className="mt-8 text-6xl font-semibold leading-tight tracking-tight md:text-7xl">
+            Operate your
+            <span className="bg-gradient-to-r from-indigo-400 to-violet-400 bg-clip-text text-transparent">
+              {" "}
+              automation SaaS
+            </span>
             <br />
-            lead operations
+            from one platform
           </h1>
 
-          <p className="mt-8 max-w-xl text-lg leading-8 text-muted-foreground">
-            Stripe billing, Telegram automation, lead routing, and analytics —
-            connected into one scalable operating system.
+          <p className="mt-8 max-w-xl text-lg leading-8 text-zinc-400">
+            Production-ready infrastructure for lead routing, Stripe billing,
+            Telegram automation, analytics, and real-time operations.
           </p>
 
           <div className="mt-10 flex flex-wrap gap-4">
-            <Button size="lg" onClick={() => go("growth")}>
-              Start Platform
+            <Button
+              size="lg"
+              onClick={() => go("growth")}
+              className="bg-white text-black hover:bg-zinc-200"
+            >
+              Launch Platform
             </Button>
 
             <a href={TELEGRAM_BOT} target="_blank">
-              <Button size="lg" variant="outline">
+              <Button
+                size="lg"
+                variant="outline"
+                className="border-white/20 bg-white/5 backdrop-blur-xl"
+              >
                 Open Telegram Bot
               </Button>
             </a>
           </div>
 
-          <div className="mt-10 flex gap-8 text-sm text-muted-foreground">
-            <div>
-              <div className="text-2xl font-semibold text-foreground">
-                99.9%
-              </div>
-              uptime
-            </div>
-
-            <div>
-              <div className="text-2xl font-semibold text-foreground">
-                Live
-              </div>
-              webhook system
-            </div>
-
-            <div>
-              <div className="text-2xl font-semibold text-foreground">
-                24/7
-              </div>
-              automation
-            </div>
+          <div className="mt-12 flex gap-10">
+            <StatMini value="99.9%" label="Uptime" />
+            <StatMini value="24/7" label="Automation" />
+            <StatMini value="$1.2M+" label="Tracked Revenue" />
           </div>
         </div>
 
+        {/* HERO GLASS PANEL */}
         <div className="relative">
-          <div className="rounded-3xl border border-border/50 bg-card/50 p-8 shadow-2xl backdrop-blur">
+          <div className="absolute -inset-10 rounded-full bg-indigo-500/20 blur-3xl" />
+
+          <Card className="relative overflow-hidden border border-white/10 bg-white/5 p-8 shadow-[0_0_80px_rgba(99,102,241,0.15)] backdrop-blur-2xl">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-medium">
-                  NorthSky Dashboard
+                <h3 className="text-lg font-medium">
+                  Operations Dashboard
                 </h3>
 
-                <p className="text-sm text-muted-foreground">
-                  Live system overview
+                <p className="text-sm text-zinc-400">
+                  Live infrastructure overview
                 </p>
               </div>
 
-              <div className="rounded-full bg-green-500/20 px-3 py-1 text-xs text-green-400">
+              <div className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-400">
                 LIVE
               </div>
             </div>
 
-            <div className="mt-8 grid gap-4">
-              <Metric
-                title="Revenue"
-                value="$48,220"
-              />
-
-              <Metric
-                title="Lead Conversion"
-                value="24.8%"
-              />
-
-              <Metric
-                title="Telegram Automations"
-                value="1,248"
-              />
-
-              <Metric
-                title="Stripe Webhooks"
-                value="Operational"
-              />
+            <div className="mt-10 grid gap-4">
+              <Metric title="Monthly Revenue" value="$48,220" />
+              <Metric title="Telegram Automations" value="1,248" />
+              <Metric title="Lead Conversion" value="24.8%" />
+              <Metric title="Webhook Health" value="Operational" />
             </div>
-          </div>
 
-          <div className="absolute -inset-10 -z-10 bg-indigo-500/20 blur-3xl" />
+            <div className="mt-10 h-[260px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={revenueData}>
+                  <defs>
+                    <linearGradient
+                      id="colorRevenue"
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="1"
+                    >
+                      <stop offset="5%" stopColor="#818cf8" stopOpacity={0.8} />
+                      <stop offset="95%" stopColor="#818cf8" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+
+                  <CartesianGrid stroke="rgba(255,255,255,0.05)" />
+
+                  <XAxis
+                    dataKey="month"
+                    stroke="#71717a"
+                    tickLine={false}
+                    axisLine={false}
+                  />
+
+                  <YAxis
+                    stroke="#71717a"
+                    tickLine={false}
+                    axisLine={false}
+                  />
+
+                  <Tooltip />
+
+                  <Area
+                    type="monotone"
+                    dataKey="revenue"
+                    stroke="#818cf8"
+                    fillOpacity={1}
+                    fill="url(#colorRevenue)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
         </div>
       </div>
     </section>
@@ -186,28 +266,122 @@ function Hero({ go }) {
 =============================== */
 function Stats() {
   return (
-    <section className="border-y border-border/40">
-      <div className="mx-auto grid max-w-7xl grid-cols-2 gap-10 px-6 py-14 text-center md:grid-cols-4">
+    <section className="border-y border-white/10 bg-white/[0.02] backdrop-blur-xl">
+      <div className="mx-auto grid max-w-7xl grid-cols-2 gap-10 px-6 py-16 text-center md:grid-cols-4">
         <Stat value="12k+" label="Leads Processed" />
-        <Stat value="$1.2M+" label="Tracked Revenue" />
-        <Stat value="99.9%" label="System Uptime" />
+        <Stat value="$1.2M+" label="Revenue Tracked" />
+        <Stat value="99.9%" label="Webhook Success" />
         <Stat value="24/7" label="Bot Automation" />
       </div>
     </section>
   );
 }
 
-function Stat({ value, label }) {
+/* ===============================
+   ANALYTICS PREVIEW
+=============================== */
+function AnalyticsPreview() {
   return (
-    <div>
-      <div className="text-3xl font-semibold">
-        {value}
+    <section className="mx-auto max-w-7xl px-6 py-28">
+      <div className="mb-12">
+        <h2 className="text-4xl font-semibold">
+          Real-time analytics
+        </h2>
+
+        <p className="mt-4 max-w-2xl text-zinc-400">
+          Monitor revenue growth, lead activity, Stripe events, and Telegram
+          automation in one operational dashboard.
+        </p>
       </div>
 
-      <div className="mt-2 text-sm text-muted-foreground">
-        {label}
+      <div className="grid gap-6 md:grid-cols-2">
+        {/* REVENUE CHART */}
+        <Card className="border border-white/10 bg-white/5 p-8 backdrop-blur-2xl">
+          <div className="mb-6">
+            <h3 className="text-lg font-medium">
+              Revenue Growth
+            </h3>
+
+            <p className="text-sm text-zinc-400">
+              Monthly Stripe revenue
+            </p>
+          </div>
+
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={revenueData}>
+                <CartesianGrid stroke="rgba(255,255,255,0.05)" />
+
+                <XAxis
+                  dataKey="month"
+                  stroke="#71717a"
+                  tickLine={false}
+                  axisLine={false}
+                />
+
+                <YAxis
+                  stroke="#71717a"
+                  tickLine={false}
+                  axisLine={false}
+                />
+
+                <Tooltip />
+
+                <Area
+                  type="monotone"
+                  dataKey="revenue"
+                  stroke="#8b5cf6"
+                  fill="#8b5cf6"
+                  fillOpacity={0.2}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
+        {/* LEADS CHART */}
+        <Card className="border border-white/10 bg-white/5 p-8 backdrop-blur-2xl">
+          <div className="mb-6">
+            <h3 className="text-lg font-medium">
+              Lead Activity
+            </h3>
+
+            <p className="text-sm text-zinc-400">
+              Daily processed leads
+            </p>
+          </div>
+
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={leadData}>
+                <CartesianGrid stroke="rgba(255,255,255,0.05)" />
+
+                <XAxis
+                  dataKey="name"
+                  stroke="#71717a"
+                  tickLine={false}
+                  axisLine={false}
+                />
+
+                <YAxis
+                  stroke="#71717a"
+                  tickLine={false}
+                  axisLine={false}
+                />
+
+                <Tooltip />
+
+                <Bar
+                  dataKey="leads"
+                  fill="#6366f1"
+                  radius={[8, 8, 0, 0]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -216,30 +390,12 @@ function Stat({ value, label }) {
 =============================== */
 function Features() {
   const items = [
-    {
-      title: "Telegram Automation",
-      desc: "Manage leads, alerts, and workflows directly from Telegram.",
-    },
-    {
-      title: "Stripe Billing",
-      desc: "Subscriptions, payments, and automated customer upgrades.",
-    },
-    {
-      title: "Lead Routing",
-      desc: "Automatically distribute and prioritize incoming leads.",
-    },
-    {
-      title: "Live Dashboard",
-      desc: "Track analytics, conversions, and operational metrics.",
-    },
-    {
-      title: "Webhook Engine",
-      desc: "Reliable real-time event processing infrastructure.",
-    },
-    {
-      title: "Production Backend",
-      desc: "Scalable Node.js architecture with Supabase integration.",
-    },
+    "Telegram Automation",
+    "Stripe Billing Engine",
+    "Lead Routing",
+    "Webhook Infrastructure",
+    "Real-time Analytics",
+    "Enterprise SaaS Backend",
   ];
 
   return (
@@ -248,27 +404,29 @@ function Features() {
       className="mx-auto max-w-7xl px-6 py-28"
     >
       <div className="text-center">
-        <h2 className="text-4xl font-semibold tracking-tight">
-          Built for automation-first businesses
+        <h2 className="text-4xl font-semibold">
+          Enterprise automation stack
         </h2>
 
-        <p className="mx-auto mt-6 max-w-2xl text-muted-foreground">
-          Everything needed to run a modern lead automation platform.
+        <p className="mx-auto mt-5 max-w-2xl text-zinc-400">
+          Designed for scalable lead systems, SaaS infrastructure,
+          and Telegram automation platforms.
         </p>
       </div>
 
       <div className="mt-16 grid gap-6 md:grid-cols-3">
         {items.map((item) => (
           <Card
-            key={item.title}
-            className="border-border/50 bg-card/40 p-8 backdrop-blur"
+            key={item}
+            className="group border border-white/10 bg-white/5 p-8 backdrop-blur-2xl transition hover:border-indigo-500/40 hover:bg-white/[0.07]"
           >
-            <h3 className="text-lg font-medium">
-              {item.title}
-            </h3>
+            <div className="text-lg font-medium">
+              {item}
+            </div>
 
-            <p className="mt-4 text-sm leading-7 text-muted-foreground">
-              {item.desc}
+            <p className="mt-4 text-sm leading-7 text-zinc-400">
+              Production-ready infrastructure with scalable architecture and
+              operational visibility.
             </p>
           </Card>
         ))}
@@ -280,35 +438,11 @@ function Features() {
 /* ===============================
    PRICING
 =============================== */
-function Pricing({ go }) {
+function Pricing({ go }: any) {
   const plans = [
-    {
-      title: "Starter",
-      price: "$9",
-      features: [
-        "Telegram bot access",
-        "Basic automation",
-        "Stripe billing",
-      ],
-    },
-    {
-      title: "Growth",
-      price: "$29",
-      features: [
-        "Unlimited leads",
-        "Advanced workflows",
-        "Priority processing",
-      ],
-    },
-    {
-      title: "Enterprise",
-      price: "$79",
-      features: [
-        "Multi-user system",
-        "Advanced analytics",
-        "Dedicated infrastructure",
-      ],
-    },
+    { title: "Starter", price: "$9" },
+    { title: "Growth", price: "$29" },
+    { title: "Enterprise", price: "$79" },
   ];
 
   return (
@@ -321,8 +455,8 @@ function Pricing({ go }) {
           Pricing
         </h2>
 
-        <p className="mt-4 text-muted-foreground">
-          Flexible plans for growing automation systems.
+        <p className="mt-4 text-zinc-400">
+          Flexible plans for automation businesses.
         </p>
       </div>
 
@@ -330,36 +464,36 @@ function Pricing({ go }) {
         {plans.map((plan) => (
           <Card
             key={plan.title}
-            className="flex flex-col border-border/50 bg-card/40 p-8 backdrop-blur"
+            className="relative overflow-hidden border border-white/10 bg-white/5 p-8 backdrop-blur-2xl"
           >
-            <div className="text-xl font-medium">
-              {plan.title}
-            </div>
+            <div className="absolute inset-0 bg-gradient-to-b from-white/[0.04] to-transparent" />
 
-            <div className="mt-6 text-5xl font-semibold">
-              {plan.price}
-              <span className="text-lg text-muted-foreground">
-                /mo
-              </span>
-            </div>
+            <div className="relative">
+              <div className="text-xl font-medium">
+                {plan.title}
+              </div>
 
-            <div className="mt-8 space-y-4">
-              {plan.features.map((f) => (
-                <div
-                  key={f}
-                  className="text-sm text-muted-foreground"
-                >
-                  ✓ {f}
-                </div>
-              ))}
-            </div>
+              <div className="mt-6 text-5xl font-semibold">
+                {plan.price}
+                <span className="text-lg text-zinc-400">
+                  /mo
+                </span>
+              </div>
 
-            <Button
-              className="mt-10 w-full"
-              onClick={() => go(plan.title.toLowerCase())}
-            >
-              Start {plan.title}
-            </Button>
+              <div className="mt-8 space-y-3 text-sm text-zinc-400">
+                <div>✓ Telegram automation</div>
+                <div>✓ Stripe subscriptions</div>
+                <div>✓ Live dashboard</div>
+                <div>✓ Analytics engine</div>
+              </div>
+
+              <Button
+                className="mt-10 w-full bg-white text-black hover:bg-zinc-200"
+                onClick={() => go(plan.title.toLowerCase())}
+              >
+                Start {plan.title}
+              </Button>
+            </div>
           </Card>
         ))}
       </div>
@@ -368,60 +502,32 @@ function Pricing({ go }) {
 }
 
 /* ===============================
-   DASHBOARD PREVIEW
+   OPERATIONS PANEL
 =============================== */
-function DashboardPreview() {
+function OperationsPanel() {
   return (
     <section className="mx-auto max-w-7xl px-6 py-28">
-      <div className="rounded-3xl border border-border/50 bg-card/40 p-10 backdrop-blur">
-        <div className="flex items-center justify-between">
+      <Card className="overflow-hidden border border-white/10 bg-white/5 p-10 backdrop-blur-2xl">
+        <div className="flex flex-col justify-between gap-10 md:flex-row">
           <div>
-            <h2 className="text-3xl font-semibold">
-              Live Operations Dashboard
+            <h2 className="text-4xl font-semibold">
+              Infrastructure Status
             </h2>
 
-            <p className="mt-4 text-muted-foreground">
-              Monitor payments, leads, Telegram automation, and analytics in real time.
+            <p className="mt-5 max-w-xl text-zinc-400">
+              Monitor Stripe billing, webhook processing,
+              Telegram automations, and operational uptime.
             </p>
           </div>
 
-          <div className="hidden rounded-full bg-green-500/20 px-4 py-2 text-sm text-green-400 md:block">
-            SYSTEM ONLINE
+          <div className="grid gap-4">
+            <Status label="Stripe API" value="Operational" />
+            <Status label="Telegram Bot" value="Connected" />
+            <Status label="Webhook Queue" value="Healthy" />
+            <Status label="Analytics Engine" value="Online" />
           </div>
         </div>
-
-        <div className="mt-12 grid gap-6 md:grid-cols-3">
-          <Card className="p-6">
-            <div className="text-sm text-muted-foreground">
-              Monthly Revenue
-            </div>
-
-            <div className="mt-3 text-3xl font-semibold">
-              $48,220
-            </div>
-          </Card>
-
-          <Card className="p-6">
-            <div className="text-sm text-muted-foreground">
-              Active Users
-            </div>
-
-            <div className="mt-3 text-3xl font-semibold">
-              1,284
-            </div>
-          </Card>
-
-          <Card className="p-6">
-            <div className="text-sm text-muted-foreground">
-              Webhook Success
-            </div>
-
-            <div className="mt-3 text-3xl font-semibold">
-              99.98%
-            </div>
-          </Card>
-        </div>
-      </div>
+      </Card>
     </section>
   );
 }
@@ -429,21 +535,21 @@ function DashboardPreview() {
 /* ===============================
    CTA
 =============================== */
-function CTA({ go }) {
+function CTA({ go }: any) {
   return (
     <section className="px-6 py-32 text-center">
-      <h2 className="text-5xl font-semibold tracking-tight">
-        Launch your automation platform
+      <h2 className="text-6xl font-semibold tracking-tight">
+        Launch your automation infrastructure
       </h2>
 
-      <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground">
-        Build a scalable SaaS system with Stripe billing,
-        Telegram automation, and production-ready infrastructure.
+      <p className="mx-auto mt-6 max-w-3xl text-lg leading-8 text-zinc-400">
+        Build a scalable SaaS platform with Stripe billing,
+        Telegram automation, analytics, and production-ready architecture.
       </p>
 
       <Button
         size="lg"
-        className="mt-10"
+        className="mt-10 bg-white px-10 text-black hover:bg-zinc-200"
         onClick={() => go("growth")}
       >
         Start Building
@@ -462,7 +568,7 @@ function TelegramFloat() {
       target="_blank"
       className="fixed bottom-6 right-6 z-50"
     >
-      <Button className="shadow-2xl">
+      <Button className="border border-white/10 bg-white/10 shadow-[0_0_40px_rgba(99,102,241,0.35)] backdrop-blur-2xl hover:bg-white/20">
         Telegram Support
       </Button>
     </a>
@@ -470,28 +576,67 @@ function TelegramFloat() {
 }
 
 /* ===============================
-   METRIC
+   COMPONENTS
 =============================== */
-function Metric({ title, value }) {
+function Metric({ title, value }: any) {
   return (
-    <div className="flex items-center justify-between rounded-xl border border-border/50 bg-background/40 p-4">
-      <div className="text-sm text-muted-foreground">
+    <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/30 p-4">
+      <div className="text-sm text-zinc-400">
         {title}
       </div>
 
-      <div className="font-medium">
+      <div className="font-medium text-white">
         {value}
       </div>
     </div>
   );
 }
 
-/* ===============================
-   FOOTER
-=============================== */
+function Stat({ value, label }: any) {
+  return (
+    <div>
+      <div className="text-4xl font-semibold">
+        {value}
+      </div>
+
+      <div className="mt-3 text-sm text-zinc-400">
+        {label}
+      </div>
+    </div>
+  );
+}
+
+function StatMini({ value, label }: any) {
+  return (
+    <div>
+      <div className="text-2xl font-semibold">
+        {value}
+      </div>
+
+      <div className="mt-1 text-sm text-zinc-500">
+        {label}
+      </div>
+    </div>
+  );
+}
+
+function Status({ label, value }: any) {
+  return (
+    <div className="flex items-center justify-between rounded-xl border border-white/10 bg-black/30 px-5 py-4 backdrop-blur-xl">
+      <div className="text-sm text-zinc-400">
+        {label}
+      </div>
+
+      <div className="text-sm font-medium text-emerald-400">
+        {value}
+      </div>
+    </div>
+  );
+}
+
 function Footer() {
   return (
-    <footer className="border-t border-border/40 py-10 text-center text-sm text-muted-foreground">
+    <footer className="border-t border-white/10 py-10 text-center text-sm text-zinc-500">
       © {new Date().getFullYear()} NorthSky. All rights reserved.
     </footer>
   );
