@@ -1,71 +1,122 @@
 import { auth } from "@clerk/nextjs/server";
-import { db } from "@/lib/db";
+import { redirect } from "next/navigation";
+
+import { supabase } from "@/lib/supabase";
 import { forecastRevenue } from "@/server/ai/revenueForecast";
+
 import { Card } from "@/components/ui/card";
 
+type Lead = {
+  id: string;
+  value: number | null;
+  score: number | null;
+  status: string | null;
+};
+
 export default async function HomePage() {
-  const { orgId } = auth();
+  const { orgId } = await auth();
 
   if (!orgId) {
-    return (
-      <div className="p-6 text-sm text-white/70">
-        No organization selected
-      </div>
-    );
+    redirect("/");
   }
 
-  const leads = await db.lead.findMany({
-    where: { orgId },
-  });
+  /* ===============================
+     FETCH LEADS
+  =============================== */
 
-  const safeLeads = leads ?? [];
+  const { data, error } = await supabase
+    .from("leads")
+    .select("*")
+    .eq("org_id", orgId);
 
-  const stats = calculateStats(safeLeads);
+  if (error) {
+    console.error(error);
+  }
 
-  const forecast = await getForecast(safeLeads);
+  const leads: Lead[] = data ?? [];
+
+  /* ===============================
+     STATS
+  =============================== */
+
+  const stats = calculateStats(leads);
+
+  /* ===============================
+     AI FORECAST
+  =============================== */
+
+  const forecast = await getForecast(leads);
 
   return (
     <div className="space-y-6">
-      {/* HEADER */}
       <Header />
 
-      {/* KPI */}
-      <KpiGrid stats={stats} forecast={forecast} />
+      <KpiGrid
+        stats={stats}
+        forecast={forecast}
+      />
 
-      {/* AI INSIGHT */}
       <AiInsight forecast={forecast} />
 
-      {/* SYSTEM STATUS */}
       <SystemStatus stats={stats} />
 
-      {/* ACTIONS */}
       <QuickActions />
     </div>
   );
 }
 
 /* ===============================
-   DATA LOGIC (CLEAN SEPARATION)
+   TYPES
 =============================== */
-function calculateStats(leads: any[]) {
+
+type Stats = {
+  total: number;
+  pipelineValue: number;
+  avgScore: number;
+  active: Lead[];
+  won: Lead[];
+  fresh: Lead[];
+};
+
+type Forecast = {
+  forecast_30_days: number;
+  confidence: number;
+  insights: string;
+};
+
+/* ===============================
+   DATA
+=============================== */
+
+function calculateStats(leads: Lead[]): Stats {
   const total = leads.length;
 
   const pipelineValue = leads.reduce(
-    (sum, l) => sum + (l.value ?? 0),
+    (sum, lead) => sum + (lead.value ?? 0),
     0
   );
 
   const avgScore =
     total === 0
       ? 0
-      : leads.reduce((sum, l) => sum + (l.score ?? 0), 0) / total;
+      : leads.reduce(
+          (sum, lead) => sum + (lead.score ?? 0),
+          0
+        ) / total;
 
   const active = leads.filter(
-    (l) => l.status !== "won" && l.status !== "lost"
+    (lead) =>
+      lead.status !== "won" &&
+      lead.status !== "lost"
   );
 
-  const won = leads.filter((l) => l.status === "won");
-  const fresh = leads.filter((l) => l.status === "new");
+  const won = leads.filter(
+    (lead) => lead.status === "won"
+  );
+
+  const fresh = leads.filter(
+    (lead) => lead.status === "new"
+  );
 
   return {
     total,
@@ -78,10 +129,13 @@ function calculateStats(leads: any[]) {
 }
 
 /* ===============================
-   AI (SAFE GUARD)
+   FORECAST
 =============================== */
-async function getForecast(leads: any[]) {
-  if (!leads || leads.length === 0) {
+
+async function getForecast(
+  leads: Lead[]
+): Promise<Forecast> {
+  if (!leads.length) {
     return {
       forecast_30_days: 0,
       confidence: 0,
@@ -91,7 +145,10 @@ async function getForecast(leads: any[]) {
 
   try {
     return await forecastRevenue(leads);
-  } catch {
+
+  } catch (error) {
+    console.error(error);
+
     return {
       forecast_30_days: 0,
       confidence: 0,
@@ -101,14 +158,17 @@ async function getForecast(leads: any[]) {
 }
 
 /* ===============================
-   UI COMPONENTS
+   UI
 =============================== */
 
 function Header() {
   return (
     <div>
-      <h1 className="text-3xl font-semibold">AI Revenue System</h1>
-      <p className="text-white/60 text-sm">
+      <h1 className="text-3xl font-semibold">
+        AI Revenue System
+      </h1>
+
+      <p className="text-sm text-white/60">
         Autonomous sales intelligence overview
       </p>
     </div>
@@ -119,50 +179,82 @@ function KpiGrid({
   stats,
   forecast,
 }: {
-  stats: any;
-  forecast: any;
+  stats: Stats;
+  forecast: Forecast;
 }) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-      <Kpi label="Total Leads" value={stats.total} />
-      <Kpi label="Avg Score" value={stats.avgScore.toFixed(1)} />
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+      <Kpi
+        label="Total Leads"
+        value={stats.total}
+      />
+
+      <Kpi
+        label="Avg Score"
+        value={stats.avgScore.toFixed(1)}
+      />
+
       <Kpi
         label="Pipeline Value"
         value={`$${stats.pipelineValue}`}
       />
+
       <Kpi
         label="Forecast (30d)"
-        value={`$${forecast.forecast_30_days ?? 0}`}
+        value={`$${forecast.forecast_30_days}`}
       />
     </div>
   );
 }
 
-function AiInsight({ forecast }: { forecast: any }) {
+function AiInsight({
+  forecast,
+}: {
+  forecast: Forecast;
+}) {
   return (
     <Card className="p-4">
-      <h2 className="font-semibold">AI Insight</h2>
+      <h2 className="font-semibold">
+        AI Insight
+      </h2>
 
-      <p className="text-white/70 text-sm mt-2">
-        Confidence: {forecast.confidence ?? 0}%
+      <p className="mt-2 text-sm text-white/70">
+        Confidence: {forecast.confidence}%
       </p>
 
-      <p className="text-white/70 text-sm mt-2">
-        {forecast.insights ?? "No insights available"}
+      <p className="mt-2 text-sm text-white/70">
+        {forecast.insights}
       </p>
     </Card>
   );
 }
 
-function SystemStatus({ stats }: { stats: any }) {
+function SystemStatus({
+  stats,
+}: {
+  stats: Stats;
+}) {
   return (
     <Card className="p-4">
-      <h2 className="font-semibold mb-3">System Status</h2>
+      <h2 className="mb-3 font-semibold">
+        System Status
+      </h2>
 
-      <div className="grid grid-cols-3 text-sm gap-4">
-        <Metric label="Active Leads" value={stats.active.length} />
-        <Metric label="Closed Deals" value={stats.won.length} />
-        <Metric label="New Intake" value={stats.fresh.length} />
+      <div className="grid grid-cols-3 gap-4 text-sm">
+        <Metric
+          label="Active Leads"
+          value={stats.active.length}
+        />
+
+        <Metric
+          label="Closed Deals"
+          value={stats.won.length}
+        />
+
+        <Metric
+          label="New Intake"
+          value={stats.fresh.length}
+        />
       </div>
     </Card>
   );
@@ -171,21 +263,26 @@ function SystemStatus({ stats }: { stats: any }) {
 function QuickActions() {
   return (
     <Card className="p-4">
-      <h2 className="font-semibold mb-3">Quick Actions</h2>
+      <h2 className="mb-3 font-semibold">
+        Quick Actions
+      </h2>
 
-      <div className="flex gap-3 flex-wrap">
-        <Action href="/leads">View Leads</Action>
-        <Action href="/pipeline">Open Pipeline</Action>
-        <Action href="/ai">AI Control Panel</Action>
-        <Action href="/analytics">Analytics</Action>
+      <div className="flex flex-wrap gap-3">
+        <Action href="/leads">
+          View Leads
+        </Action>
+
+        <Action href="/pipeline">
+          Open Pipeline
+        </Action>
+
+        <Action href="/analytics">
+          Analytics
+        </Action>
       </div>
     </Card>
   );
 }
-
-/* ===============================
-   SMALL UI PRIMITIVES
-=============================== */
 
 function Kpi({
   label,
@@ -195,9 +292,14 @@ function Kpi({
   value: string | number;
 }) {
   return (
-    <div className="border border-white/10 rounded-xl p-4">
-      <div className="text-white/60 text-sm">{label}</div>
-      <div className="text-2xl font-semibold mt-1">{value}</div>
+    <div className="rounded-xl border border-white/10 p-4">
+      <div className="text-sm text-white/60">
+        {label}
+      </div>
+
+      <div className="mt-1 text-2xl font-semibold">
+        {value}
+      </div>
     </div>
   );
 }
@@ -211,8 +313,13 @@ function Metric({
 }) {
   return (
     <div>
-      <div className="text-xl font-semibold">{value}</div>
-      <div className="text-white/60">{label}</div>
+      <div className="text-xl font-semibold">
+        {value}
+      </div>
+
+      <div className="text-white/60">
+        {label}
+      </div>
     </div>
   );
 }
@@ -227,7 +334,7 @@ function Action({
   return (
     <a
       href={href}
-      className="px-3 py-2 text-sm border border-white/20 rounded hover:bg-white hover:text-black transition"
+      className="rounded border border-white/20 px-3 py-2 text-sm transition hover:bg-white hover:text-black"
     >
       {children}
     </a>
