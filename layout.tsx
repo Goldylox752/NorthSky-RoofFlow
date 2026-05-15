@@ -1,97 +1,46 @@
-import Link from "next/link";
-import { auth } from "@clerk/nextjs/server";
-import { UserButton } from "@clerk/nextjs";
+import type { Metadata } from "next";
+import "./globals.css";
 
-export default function DashboardLayout({
+export const metadata: Metadata = {
+  title: "NorthSky AI",
+  description:
+    "Autonomous AI revenue system for lead generation, sales automation, and conversion optimization.",
+  keywords: [
+    "AI SaaS",
+    "automation",
+    "lead generation",
+    "sales AI",
+    "Stripe SaaS",
+  ],
+  openGraph: {
+    title: "NorthSky AI",
+    description:
+      "Autonomous AI system that generates leads, closes deals, and drives revenue.",
+    type: "website",
+  },
+};
+
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { orgId } = auth();
-
   return (
-    <div className="min-h-screen flex bg-black text-white">
-
-      {/* SIDEBAR */}
-      <aside className="w-64 border-r border-white/10 p-4 space-y-6">
-
-        {/* BRAND */}
-        <div className="text-lg font-semibold">
-          Revenue AI OS
-        </div>
-
-        {/* NAV */}
-        <nav className="space-y-2 text-sm">
-
-          <NavItem href="/" label="Dashboard" />
-          <NavItem href="/leads" label="Leads" />
-          <NavItem href="/pipeline" label="Pipeline" />
-          <NavItem href="/ai" label="AI Control" />
-          <NavItem href="/analytics" label="Analytics" />
-          <NavItem href="/billing" label="Billing" />
-          <NavItem href="/team" label="Team" />
-          <NavItem href="/settings" label="Settings" />
-
-        </nav>
-
-        {/* ORG INFO */}
-        <div className="pt-6 border-t border-white/10 text-xs text-white/60">
-          <div>Organization</div>
-          <div className="text-white/80 mt-1">
-            {orgId || "No org selected"}
-          </div>
-        </div>
-
-      </aside>
-
-      {/* MAIN AREA */}
-      <div className="flex-1 flex flex-col">
-
-        {/* TOPBAR */}
-        <header className="h-14 border-b border-white/10 flex items-center justify-between px-6">
-
-          <div className="text-sm text-white/60">
-            Autonomous Revenue System
-          </div>
-
-          <div className="flex items-center gap-4">
-
-            <div className="text-xs text-white/50">
-              Live AI Agents Running
-            </div>
-
-            <UserButton afterSignOutUrl="/" />
-
-          </div>
-
-        </header>
-
-        {/* CONTENT */}
-        <main className="p-6 overflow-auto">
-          {children}
-        </main>
-
-      </div>
-    </div>
+    <html lang="en">
+      <body className="bg-black text-white antialiased">
+        <AppShell>{children}</AppShell>
+      </body>
+    </html>
   );
 }
 
 /* ===============================
-   NAV ITEM
+   APP SHELL (GLOBAL WRAPPER)
 =============================== */
-function NavItem({
-  href,
-  label,
-}: {
-  href: string;
-  label: string;
-}) {
+function AppShell({ children }: { children: React.ReactNode }) {
   return (
-    <Link
-      href={href}
-      className="block px-3 py-2 rounded hover:bg-white hover:text-black transition"
-    >
-      {label}
-    </Link>
+    <div className="min-h-screen flex flex-col">
+      {children}
+    </div>
   );
 }
