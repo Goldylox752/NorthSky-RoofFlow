@@ -1,109 +1,97 @@
-import { ClerkProvider, SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import Link from "next/link";
-import { getUserPlan } from "@/lib/billing";
 import { auth } from "@clerk/nextjs/server";
+import { UserButton } from "@clerk/nextjs";
 
-export default async function DashboardLayout({
+export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const { orgId } = auth();
-  const plan = orgId ? await getUserPlan(orgId) : "free";
 
   return (
-    <ClerkProvider>
-      <html lang="en">
-        <body className="bg-black text-white min-h-screen">
+    <div className="min-h-screen flex bg-black text-white">
 
-          {/* TOP BAR */}
-          <header className="border-b border-white/10 px-6 py-4 flex items-center justify-between">
+      {/* SIDEBAR */}
+      <aside className="w-64 border-r border-white/10 p-4 space-y-6">
 
-            {/* BRAND */}
-            <Link href="/dashboard" className="font-semibold text-lg">
-              Revenue OS
-            </Link>
+        {/* BRAND */}
+        <div className="text-lg font-semibold">
+          Revenue AI OS
+        </div>
 
-            {/* NAV */}
-            <nav className="flex items-center gap-6 text-sm text-white/70">
+        {/* NAV */}
+        <nav className="space-y-2 text-sm">
 
-              <Link href="/dashboard">Dashboard</Link>
-              <Link href="/leads">Leads</Link>
-              <Link href="/pipeline">Pipeline</Link>
+          <NavItem href="/" label="Dashboard" />
+          <NavItem href="/leads" label="Leads" />
+          <NavItem href="/pipeline" label="Pipeline" />
+          <NavItem href="/ai" label="AI Control" />
+          <NavItem href="/analytics" label="Analytics" />
+          <NavItem href="/billing" label="Billing" />
+          <NavItem href="/team" label="Team" />
+          <NavItem href="/settings" label="Settings" />
 
-              {/* PLAN BADGE */}
-              <span className="text-xs px-2 py-1 border border-white/20 rounded">
-                {plan.toUpperCase()}
-              </span>
+        </nav>
 
-              {/* UPGRADE BUTTON */}
-              {plan === "free" && (
-                <button
-                  onClick={async () => {
-                    const res = await fetch("/api/stripe/checkout", {
-                      method: "POST",
-                    });
+        {/* ORG INFO */}
+        <div className="pt-6 border-t border-white/10 text-xs text-white/60">
+          <div>Organization</div>
+          <div className="text-white/80 mt-1">
+            {orgId || "No org selected"}
+          </div>
+        </div>
 
-                    const data = await res.json();
-                    window.location.href = data.url;
-                  }}
-                  className="px-3 py-1 bg-white text-black rounded text-xs"
-                >
-                  Upgrade
-                </button>
-              )}
+      </aside>
 
-              <SignedIn>
-                <UserButton afterSignOutUrl="/" />
-              </SignedIn>
+      {/* MAIN AREA */}
+      <div className="flex-1 flex flex-col">
 
-            </nav>
-          </header>
+        {/* TOPBAR */}
+        <header className="h-14 border-b border-white/10 flex items-center justify-between px-6">
 
-          {/* AUTH */}
-          <SignedOut>
-            <div className="flex items-center justify-center min-h-[80vh]">
-              <div className="text-center space-y-3">
-                <h1 className="text-xl font-semibold">
-                  Access Required
-                </h1>
-                <Link
-                  href="/sign-in"
-                  className="px-4 py-2 bg-white text-black rounded inline-block"
-                >
-                  Sign In
-                </Link>
-              </div>
+          <div className="text-sm text-white/60">
+            Autonomous Revenue System
+          </div>
+
+          <div className="flex items-center gap-4">
+
+            <div className="text-xs text-white/50">
+              Live AI Agents Running
             </div>
-          </SignedOut>
 
-          {/* APP */}
-          <SignedIn>
-            <div className="flex">
+            <UserButton afterSignOutUrl="/" />
 
-              {/* SIDEBAR */}
-              <aside className="hidden md:block w-64 border-r border-white/10 min-h-[calc(100vh-60px)] p-4">
-                <div className="space-y-3 text-sm text-white/70">
+          </div>
 
-                  <Link href="/dashboard">Overview</Link>
-                  <Link href="/leads">Leads CRM</Link>
-                  <Link href="/pipeline">Pipeline</Link>
-                  <Link href="/analytics">Analytics</Link>
-                  <Link href="/settings">Settings</Link>
+        </header>
 
-                </div>
-              </aside>
+        {/* CONTENT */}
+        <main className="p-6 overflow-auto">
+          {children}
+        </main>
 
-              {/* CONTENT */}
-              <main className="flex-1 p-6">
-                {children}
-              </main>
+      </div>
+    </div>
+  );
+}
 
-            </div>
-          </SignedIn>
-
-        </body>
-      </html>
-    </ClerkProvider>
+/* ===============================
+   NAV ITEM
+=============================== */
+function NavItem({
+  href,
+  label,
+}: {
+  href: string;
+  label: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="block px-3 py-2 rounded hover:bg-white hover:text-black transition"
+    >
+      {label}
+    </Link>
   );
 }
