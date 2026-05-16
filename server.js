@@ -16,57 +16,67 @@ const server = app.listen(PORT, () => {
 });
 
 /* ===============================
-   STATE TRACKING
+   STATE
 =============================== */
-let isShuttingDown = false;
+let shuttingDown = false;
 
 /* ===============================
-   SHUTDOWN HANDLER
+   SHUTDOWN ORCHESTRATOR
 =============================== */
 async function shutdown(signal) {
-  if (isShuttingDown) return;
-  isShuttingDown = true;
+  if (shuttingDown) return;
+  shuttingDown = true;
 
   console.log(`Shutdown initiated: ${signal}`);
 
   try {
-    // Stop accepting new requests
-    await new Promise((resolve) => {
-      server.close((err) => {
-        if (err) {
-          console.error("Error closing HTTP server:", err);
-        } else {
-          console.log("HTTP server closed cleanly");
-        }
-        resolve();
-      });
-    });
-
-    // Future SaaS cleanup hooks (safe expansion point)
+    await stopHttpServer();
     await cleanupResources();
-
   } catch (err) {
     console.error("Shutdown error:", err);
   }
 
-  // Force exit safeguard (prevents stuck deployments)
+  forceExitIfNeeded();
+}
+
+/* ===============================
+   STOP HTTP SERVER
+=============================== */
+function stopHttpServer() {
+  return new Promise((resolve) => {
+    server.close((err) => {
+      if (err) {
+        console.error("Error closing HTTP server:", err);
+      } else {
+        console.log("HTTP server closed cleanly");
+      }
+      resolve();
+    });
+  });
+}
+
+/* ===============================
+   CLEANUP HOOKS (AI + SAAS READY)
+=============================== */
+async function cleanupResources() {
+  // Future production hooks:
+  // await closeDatabase();
+  // await closeRedis();
+  // await stopQueueWorkers();
+  // await stopAIAgents();
+  // await flushTelemetry();
+
+  return true;
+}
+
+/* ===============================
+   SAFETY FORCE EXIT
+=============================== */
+function forceExitIfNeeded() {
   setTimeout(() => {
     console.error("Forced shutdown (timeout reached)");
     process.exit(1);
   }, 10000).unref();
-}
-
-/* ===============================
-   CLEANUP HOOKS (EXTENDABLE)
-=============================== */
-async function cleanupResources() {
-  // Future integrations:
-  // - database close
-  // - redis shutdown
-  // - queue worker stop
-  // - AI agent loop stop
-
-  return true;
 }
 
 /* ===============================
