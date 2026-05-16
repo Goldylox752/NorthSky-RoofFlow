@@ -27,19 +27,16 @@ const db = {
 };
 
 /* ===============================
-   SAFE EMAIL EXTRACTOR
+   EMAIL EXTRACTOR
 =============================== */
-const getEmail = (session) => {
-  return (
-    session?.customer_details?.email ||
-    session?.customer_email ||
-    session?.metadata?.email ||
-    null
-  );
-};
+const getEmail = (session) =>
+  session?.customer_details?.email ||
+  session?.customer_email ||
+  session?.metadata?.email ||
+  null;
 
 /* ===============================
-   STRIPE WEBHOOK ROUTE
+   WEBHOOK ROUTE
 =============================== */
 router.post(
   "/",
@@ -63,7 +60,7 @@ router.post(
         process.env.STRIPE_WEBHOOK_SECRET
       );
     } catch (err) {
-      console.error("Webhook signature verification failed:", err.message);
+      console.error("Invalid Stripe signature:", err.message);
 
       return res.status(400).json({
         success: false,
@@ -71,10 +68,10 @@ router.post(
       });
     }
 
-    const type = event.type;
-    const data = event.data.object;
-
     try {
+      const type = event.type;
+      const data = event.data.object;
+
       /* ===============================
          CHECKOUT COMPLETED
       =============================== */
@@ -95,13 +92,14 @@ router.post(
           activated_at: new Date().toISOString(),
         };
 
-        await db.upsertUser([payload]);
+        // ✅ FIXED (NO ARRAY)
+        await db.upsertUser(payload);
 
         console.log("User activated:", email);
       }
 
       /* ===============================
-         SUBSCRIPTION CREATED / UPDATED
+         SUBSCRIPTION UPDATED
       =============================== */
       if (
         type === "customer.subscription.created" ||
@@ -117,8 +115,6 @@ router.post(
           status: data.status === "active" ? "active" : "inactive",
           stripe_subscription_id: data.id,
         });
-
-        console.log("Subscription synced:", data.customer);
       }
 
       /* ===============================
@@ -129,8 +125,6 @@ router.post(
           status: "canceled",
           plan: "starter",
         });
-
-        console.log("Subscription canceled:", data.customer);
       }
 
       /* ===============================
@@ -140,16 +134,11 @@ router.post(
         await db.updateUserByCustomer(data.customer, {
           status: "past_due",
         });
-
-        console.log("Payment failed:", data.customer);
       }
 
-      /* ===============================
-         ACK STRIPE
-      =============================== */
       return res.json({ received: true });
     } catch (err) {
-      console.error("Webhook handler error:", err);
+      console.error("Webhook processing error:", err);
 
       return res.status(500).json({
         success: false,
