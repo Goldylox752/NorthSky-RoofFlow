@@ -1,40 +1,69 @@
 require("dotenv").config();
+
 const app = require("./app");
 
 const PORT = process.env.PORT || 3000;
 
+/* ===============================
+   START SERVER (SAFE BOOT)
+=============================== */
 const server = app.listen(PORT, () => {
   console.log("=================================");
-  console.log("🚀 NorthSky Server Running");
-  console.log(`📡 Port: ${PORT}`);
+  console.log("NorthSky Server Online");
+  console.log(`Port: ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV || "development"}`);
   console.log("=================================");
 });
 
 /* ===============================
+   STATE TRACKING
+=============================== */
+let isShuttingDown = false;
+
+/* ===============================
    GRACEFUL SHUTDOWN (PRODUCTION SAFE)
 =============================== */
+function shutdown(signal) {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
 
-let shuttingDown = false;
+  console.log(`Shutdown triggered: ${signal}`);
 
-const shutdown = (signal) => {
-  if (shuttingDown) return;
-  shuttingDown = true;
+  try {
+    server.close(() => {
+      console.log("HTTP server closed cleanly");
+    });
 
-  console.log(`\n🛑 Received ${signal}. Shutting down gracefully...`);
+    // Future hooks:
+    // await closeDatabase();
+    // await closeRedis();
+    // await stopWorkers();
 
-  server.close(() => {
-    console.log("✅ HTTP server closed");
+  } catch (err) {
+    console.error("Error during shutdown:", err);
+  }
 
-    // optional cleanup hooks (DB, queues, etc.)
-    process.exit(0);
-  });
-
-  // force exit if hanging (important for Render)
   setTimeout(() => {
-    console.error("⚠️ Forced shutdown after timeout");
+    console.error("Forced shutdown due to timeout");
     process.exit(1);
-  }, 10000);
-};
+  }, 10000).unref();
+}
 
+/* ===============================
+   SIGNAL HANDLERS
+=============================== */
 process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("SIGTERM", () => shutdown("SIGTERM"));
+
+/* ===============================
+   GLOBAL ERROR SAFETY
+=============================== */
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught Exception:", err);
+  shutdown("uncaughtException");
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled Rejection:", reason);
+  shutdown("unhandledRejection");
+});
