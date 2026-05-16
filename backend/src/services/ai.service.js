@@ -1,35 +1,53 @@
-const calculateScore = require("../utils/scoring");
-const getTier = require("../utils/scoring");
-const calculatePrice = require("../utils/pricing");
+const OpenAI = require("openai");
 
-function aiAnalyzeLead(lead) {
-  const baseScore = calculateScore(lead);
-  const tier = getTier(baseScore);
-  const price = calculatePrice(baseScore, lead.city);
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
-  // 🧠 AI logic layer (rule-based “AI v1”)
-  const confidence =
-    baseScore > 80 ? "high" :
-    baseScore > 50 ? "medium" : "low";
+/* ===============================
+   AI LEAD ANALYSIS (REAL)
+=============================== */
+async function aiAnalyzeLead(lead) {
+  const prompt = `
+You are a SaaS revenue optimization engine.
 
-  const conversionProbability =
-    baseScore > 80 ? 0.75 :
-    baseScore > 50 ? 0.45 : 0.2;
+Analyze this lead and return ONLY valid JSON:
 
-  const recommendation =
-    baseScore > 80 ? "upsell_elite" :
-    baseScore > 50 ? "standard_offer" : "nurture";
+Lead:
+- email: ${lead.email}
+- phone: ${lead.phone}
+- city: ${lead.city}
 
-  return {
-    score: baseScore,
-    tier,
-    price,
-    confidence,
-    conversionProbability,
-    recommendation,
-  };
+Return:
+{
+  "score": number (0-100),
+  "tier": "starter | pro | elite",
+  "price_multiplier": number,
+  "conversion_probability": number (0-1),
+  "recommendation": "nurture | standard_offer | upsell_elite",
+  "sales_angle": string
+}
+`;
+
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [{ role: "user", content: prompt }],
+    temperature: 0.4,
+  });
+
+  try {
+    return JSON.parse(response.choices[0].message.content);
+  } catch (err) {
+    console.error("AI parse error:", err);
+    return {
+      score: 50,
+      tier: "starter",
+      price_multiplier: 1,
+      conversion_probability: 0.3,
+      recommendation: "nurture",
+      sales_angle: "Generic offer",
+    };
+  }
 }
 
-module.exports = {
-  aiAnalyzeLead,
-};
+module.exports = { aiAnalyzeLead };
