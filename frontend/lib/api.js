@@ -18,19 +18,23 @@ async function safeParse(res: Response) {
 }
 
 // =====================
-// CORE FETCH WRAPPER (CLERK READY)
+// CORE FETCH WRAPPER
 // =====================
 async function apiFetch(
   path: string,
-  options: RequestInit & { getToken?: () => Promise<string | null>; timeout?: number } = {}
+  options: RequestInit & {
+    getToken?: () => Promise<string | null>;
+    timeout?: number;
+  } = {}
 ) {
   if (!API) throw new Error("API base URL is not configured");
 
   const controller = new AbortController();
-  const timeout = setTimeout(
-    () => controller.abort(),
-    options.timeout || 10000
-  );
+  const timeoutMs = options.timeout ?? 10000;
+
+  const timeoutId = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
 
   let token: string | null = null;
 
@@ -40,7 +44,7 @@ async function apiFetch(
 
   try {
     const res = await fetch(`${API}${path}`, {
-      method: options.method || "GET",
+      method: options.method ?? "GET",
       headers: {
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -52,24 +56,24 @@ async function apiFetch(
 
     const data = await safeParse(res);
 
-    clearTimeout(timeout);
+    clearTimeout(timeoutId);
 
     if (!res.ok) {
-      const error = new Error(
+      const error: any = new Error(
         data?.message || data?.error || `Request failed (${res.status})`
       );
 
-      (error as any).status = res.status;
-      (error as any).data = data;
+      error.status = res.status;
+      error.data = data;
 
       throw error;
     }
 
     return data;
   } catch (err: any) {
-    clearTimeout(timeout);
+    clearTimeout(timeoutId);
 
-    if (err.name === "AbortError") {
+    if (err?.name === "AbortError") {
       throw new Error("⏱ Request timeout — server not responding");
     }
 
@@ -80,31 +84,38 @@ async function apiFetch(
 // =====================
 // API METHODS
 // =====================
-export const createLead = (payload: any, getToken: any) =>
+
+export const createLead = (payload: unknown, getToken?: () => Promise<string | null>) =>
   apiFetch("/api/leads", {
     method: "POST",
     body: JSON.stringify(payload),
     getToken,
   });
 
-export const getLeads = (getToken: any) =>
+export const getLeads = (getToken?: () => Promise<string | null>) =>
   apiFetch("/api/leads", { getToken });
 
-export const scoreLead = (payload: any, getToken: any) =>
+export const scoreLead = (payload: unknown, getToken?: () => Promise<string | null>) =>
   apiFetch("/api/score", {
     method: "POST",
     body: JSON.stringify(payload),
     getToken,
   });
 
-export const createCheckoutSession = (payload: any, getToken: any) =>
+export const createCheckoutSession = (
+  payload: unknown,
+  getToken?: () => Promise<string | null>
+) =>
   apiFetch("/api/payments/create-session", {
     method: "POST",
     body: JSON.stringify(payload),
     getToken,
   });
 
-export const openBillingPortal = (email: string, getToken: any) =>
+export const openBillingPortal = (
+  email: string,
+  getToken?: () => Promise<string | null>
+) =>
   apiFetch("/api/billing/portal", {
     method: "POST",
     body: JSON.stringify({ email }),
