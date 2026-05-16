@@ -10,9 +10,8 @@ const { calculateScore, getTier } = require("../utils/scoring");
 const { calculatePrice } = require("../services/pricingEngine");
 
 /* ===============================
-   ENV CHECK
+   ENV CHECK (fail fast)
 =============================== */
-
 if (!process.env.CLIENT_URL) {
   throw new Error("Missing CLIENT_URL");
 }
@@ -21,9 +20,8 @@ const TG_TOKEN = process.env.TG_TOKEN;
 const TG_CHAT_ID = process.env.TG_CHAT_ID;
 
 /* ===============================
-   TELEGRAM (NON-BLOCKING LOGGER)
+   TELEGRAM (NON-BLOCKING)
 =============================== */
-
 function sendTelegram(message) {
   if (!TG_TOKEN || !TG_CHAT_ID) return;
 
@@ -41,7 +39,6 @@ function sendTelegram(message) {
 /* ===============================
    HELPERS
 =============================== */
-
 const clean = (v) => (typeof v === "string" ? v.trim() : null);
 
 const normalizeEmail = (email) =>
@@ -53,46 +50,49 @@ const sanitizeUTM = (v) =>
 /* ===============================
    STRIPE CHECKOUT
 =============================== */
-
 async function createCheckoutSession({ lead, tier, score, price }) {
-  return stripe.checkout.sessions.create({
-    mode: "payment",
-    payment_method_types: ["card"],
-    billing_address_collection: "auto",
-    customer_creation: "always",
+  try {
+    return await stripe.checkout.sessions.create({
+      mode: "payment",
+      payment_method_types: ["card"],
+      billing_address_collection: "auto",
+      customer_creation: "always",
 
-    line_items: [
-      {
-        quantity: 1,
-        price_data: {
-          currency: "cad",
-          unit_amount: Math.round(Number(price) * 100),
-          product_data: {
-            name: `NorthSky ${tier} Access`,
-            description: "AI SaaS automation system",
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: "cad",
+            unit_amount: Math.round(Number(price) * 100),
+            product_data: {
+              name: `NorthSky ${tier} Access`,
+              description: "AI SaaS automation system",
+            },
           },
         },
+      ],
+
+      metadata: {
+        leadId: lead.id,
+        tier,
+        score: String(score),
+        email: lead.email || "",
       },
-    ],
 
-    metadata: {
-      leadId: lead.id,
-      tier,
-      score: String(score),
-      email: lead.email || "",
-    },
+      success_url: `${process.env.CLIENT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.CLIENT_URL}/cancel`,
 
-    success_url: `${process.env.CLIENT_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${process.env.CLIENT_URL}/cancel`,
-
-    expires_at: Math.floor(Date.now() / 1000) + 60 * 30,
-  });
+      expires_at: Math.floor(Date.now() / 1000) + 60 * 30,
+    });
+  } catch (err) {
+    console.error("Stripe checkout error:", err);
+    throw new Error("Failed to create checkout session");
+  }
 }
 
 /* ===============================
-   ROUTE HANDLER
+   ROUTE
 =============================== */
-
 router.post("/", async (req, res) => {
   const startTime = Date.now();
 
@@ -107,7 +107,7 @@ router.post("/", async (req, res) => {
       utm_medium,
     } = req.body || {};
 
-    /* ---------- normalize input ---------- */
+    /* ---------- normalize ---------- */
     name = clean(name);
     email = normalizeEmail(email);
     phone = clean(phone);
@@ -121,7 +121,7 @@ router.post("/", async (req, res) => {
     if (!email && !phone) {
       return res.status(400).json({
         success: false,
-        error: "Email or phone required",
+        error: "email_or_phone_required",
       });
     }
 
@@ -147,13 +147,12 @@ router.post("/", async (req, res) => {
     const tier = getTier(score);
     const price = calculatePrice(score, city);
 
-    /* ---------- request metadata ---------- */
+    /* ---------- metadata ---------- */
     const ip =
       (req.headers["x-forwarded-for"] || "")
         .split(",")[0]
         .trim() || req.ip;
 
-    /* ---------- create lead payload ---------- */
     const leadId = crypto.randomUUID();
 
     const leadPayload = {
@@ -191,13 +190,14 @@ router.post("/", async (req, res) => {
       .single();
 
     if (error || !lead) {
+      console.error("Supabase insert error:", error);
       return res.status(500).json({
         success: false,
         error: "lead_insert_failed",
       });
     }
 
-    /* ---------- async telegram notify ---------- */
+    /* ---------- telegram notify ---------- */
     sendTelegram(
       `NEW LEAD\n\n` +
       `Name: ${lead.name || "N/A"}\n` +
@@ -216,7 +216,7 @@ router.post("/", async (req, res) => {
       price,
     });
 
-    /* ---------- store session ---------- */
+    /* ---------- update lead ---------- */
     await supabase
       .from("leads")
       .update({ stripe_session_id: session.id })
@@ -248,9 +248,7 @@ router.post("/", async (req, res) => {
   } catch (err) {
     console.error("LEAD ROUTE ERROR:", err);
 
-    sendTelegram(
-      `SYSTEM ERROR\n\n${err.message || "Unknown error"}`
-    );
+    sendTelegram(`SYSTEM ERROR\n\n${err.message || "Unknown error"}`);
 
     return res.status(500).json({
       success: false,
