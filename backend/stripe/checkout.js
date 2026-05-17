@@ -18,18 +18,9 @@ if (!BASE_URL) {
 =============================== */
 
 const PRICES = Object.freeze({
-  starter: {
-    amount: 1000,
-    name: "Starter",
-  },
-  growth: {
-    amount: 2000,
-    name: "Growth",
-  },
-  elite: {
-    amount: 5000,
-    name: "Elite",
-  },
+  starter: { amount: 1000, name: "Starter" },
+  growth: { amount: 2000, name: "Growth" },
+  elite: { amount: 5000, name: "Elite" },
 });
 
 /* ===============================
@@ -37,7 +28,7 @@ const PRICES = Object.freeze({
 =============================== */
 
 const clean = (v) =>
-  typeof v === "string" && v.trim().length > 0 ? v.trim() : null;
+  typeof v === "string" && v.trim() ? v.trim().toLowerCase() : null;
 
 const getIp = (req) =>
   req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
@@ -51,7 +42,7 @@ const generateIdempotencyKey = ({ userId, plan, amount }) =>
     .digest("hex");
 
 /* ===============================
-   GET STRIPE CUSTOMER
+   STRIPE CUSTOMER LOOKUP
 =============================== */
 
 async function getStripeCustomer(authId) {
@@ -62,13 +53,15 @@ async function getStripeCustomer(authId) {
     .maybeSingle();
 
   if (error) throw new Error("Customer lookup failed");
-  if (!data?.stripe_customer_id) throw new Error("Missing Stripe customer");
+  if (!data?.stripe_customer_id) {
+    throw new Error("Missing Stripe customer");
+  }
 
   return data;
 }
 
 /* ===============================
-   CREATE STRIPE SESSION
+   CREATE STRIPE CHECKOUT SESSION
 =============================== */
 
 async function createStripeSession({
@@ -88,7 +81,6 @@ async function createStripeSession({
       mode: "payment",
 
       customer: customerId,
-      customer_creation: "always",
 
       payment_method_types: ["card"],
 
@@ -102,7 +94,7 @@ async function createStripeSession({
             currency: "usd",
             unit_amount: amount,
             product_data: {
-              name: `Flow OS — ${plan.toUpperCase()}`,
+              name: `Flow OS — ${plan}`,
               description: "SaaS access + automation platform",
             },
           },
@@ -135,7 +127,7 @@ async function checkout(req, res) {
 
   try {
     /* ===============================
-       AUTH (MUST COME FROM MIDDLEWARE)
+       AUTH
     =============================== */
 
     const user = req.user;
@@ -143,7 +135,7 @@ async function checkout(req, res) {
     if (!user?.id) {
       return res.status(401).json({
         success: false,
-        error: "Unauthorized",
+        error: "unauthorized",
       });
     }
 
@@ -151,24 +143,24 @@ async function checkout(req, res) {
        PLAN VALIDATION
     =============================== */
 
-    const plan = clean(req.body?.plan)?.toLowerCase() || "starter";
+    const plan = clean(req.body?.plan) || "starter";
     const pricing = PRICES[plan];
 
     if (!pricing) {
       return res.status(400).json({
         success: false,
-        error: "Invalid plan",
+        error: "invalid_plan",
       });
     }
 
     /* ===============================
-       GET STRIPE CUSTOMER
+       STRIPE CUSTOMER
     =============================== */
 
     const customer = await getStripeCustomer(user.id);
 
     /* ===============================
-       CREATE SESSION
+       CREATE CHECKOUT SESSION
     =============================== */
 
     const session = await createStripeSession({
@@ -179,22 +171,27 @@ async function checkout(req, res) {
     });
 
     if (!session?.url) {
-      throw new Error("Stripe session failed");
+      throw new Error("Stripe session creation failed");
     }
 
     /* ===============================
-       AUDIT LOG (NON-BLOCKING)
+       AUDIT LOG (SAFE NON-BLOCKING)
     =============================== */
 
-    supabase.from("checkout_logs").insert({
-      auth_id: user.id,
-      stripe_session_id: session.id,
-      plan,
-      amount: pricing.amount,
-      ip_address: getIp(req),
-      user_agent: req.headers["user-agent"] || null,
-      created_at: new Date().toISOString(),
-    });
+    supabase
+      .from("checkout_logs")
+      .insert({
+        auth_id: user.id,
+        stripe_session_id: session.id,
+        plan,
+        amount: pricing.amount,
+        ip_address: getIp(req),
+        user_agent: req.headers["user-agent"] || null,
+        created_at: new Date().toISOString(),
+      })
+      .then(({ error }) => {
+        if (error) console.error("audit_log_error", error.message);
+      });
 
     /* ===============================
        RESPONSE
@@ -214,11 +211,11 @@ async function checkout(req, res) {
       },
     });
   } catch (err) {
-    console.error("Checkout error:", err);
+    console.error("[checkout] error:", err);
 
     return res.status(500).json({
       success: false,
-      error: err.message || "Checkout failed",
+      error: err.message || "checkout_failed",
     });
   }
 }
