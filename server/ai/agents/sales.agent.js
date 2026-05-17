@@ -1,21 +1,43 @@
-const { runSalesAgent } = require("../agents/sales.agent");
-const { runQualificationAgent } = require("../agents/qualification.agent");
-const { runFollowupAgent } = require("../agents/followup.agent");
+const OpenAI = require("openai");
 
-async function runLeadWorkflow(lead) {
-  const qualification = await runQualificationAgent(lead);
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
-  if (!qualification.qualified) {
-    return;
-  }
+async function salesAgent(lead) {
+  const prompt = `
+You are an AI sales operator.
 
-  const salesResult = await runSalesAgent(lead);
+Decide what to do with this lead.
 
-  if (salesResult.needsFollowup) {
-    await runFollowupAgent(lead);
+Lead:
+- score: ${lead.score}
+- city: ${lead.city}
+- status: ${lead.status}
+
+Return ONLY JSON:
+{
+  "action": "IGNORE | FOLLOW_UP | CLOSE",
+  "reason": "short explanation",
+  "priority": 1-10
+}
+`;
+
+  const res = await client.chat.completions.create({
+    model: "gpt-4.1-mini",
+    messages: [{ role: "user", content: prompt }],
+    temperature: 0.3,
+  });
+
+  try {
+    return JSON.parse(res.choices[0].message.content);
+  } catch {
+    return {
+      action: "IGNORE",
+      reason: "parse_error",
+      priority: 0,
+    };
   }
 }
 
-module.exports = {
-  runLeadWorkflow,
-};
+module.exports = { salesAgent };
