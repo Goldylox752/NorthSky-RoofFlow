@@ -8,13 +8,12 @@ const auth = async (req, res, next) => {
     if (!header?.startsWith("Bearer ")) {
       return res.status(401).json({
         success: false,
-        error: "Missing authorization header",
+        error: "missing_authorization_header",
       });
     }
 
     const token = header.split(" ")[1];
 
-    // Clerk verifies the session token
     const payload = await verifyToken(token, {
       secretKey: process.env.CLERK_SECRET_KEY,
     });
@@ -22,14 +21,19 @@ const auth = async (req, res, next) => {
     if (!payload?.sub) {
       return res.status(401).json({
         success: false,
-        error: "Invalid session",
+        error: "invalid_session",
       });
     }
 
-    // Attach Clerk user identity
+    // safer email extraction
+    const email =
+      payload.email ||
+      payload.email_address ||
+      null;
+
     req.user = {
-      id: payload.sub, // Clerk user ID
-      email: payload.email,
+      id: payload.sub,
+      email,
       role: payload.public_metadata?.role || "user",
       plan: payload.public_metadata?.plan || "starter",
     };
@@ -42,12 +46,12 @@ const auth = async (req, res, next) => {
         path: req.path,
         ip: req.ip,
       },
-      "Clerk auth failed"
+      "clerk_auth_failed"
     );
 
     return res.status(401).json({
       success: false,
-      error: "Unauthorized",
+      error: "unauthorized",
     });
   }
 };
