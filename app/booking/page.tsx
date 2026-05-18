@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, FormEvent } from "react";
 
 export default function BookingPage() {
   const [loading, setLoading] = useState(false);
 
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
 
