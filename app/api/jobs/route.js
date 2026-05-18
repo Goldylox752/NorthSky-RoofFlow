@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 // 🧼 VALIDATION
 // ===============================
 function validateJobInput(body) {
-  const { lead_id, assigned_to } = body;
+  const { lead_id, assigned_to } = body || {};
 
   if (!lead_id || !assigned_to) {
     return "Missing lead_id or assigned_to";
@@ -32,13 +32,18 @@ export async function POST(req) {
     const { lead_id, assigned_to, status } = body;
     const finalStatus = status || "pending";
 
+    // validation
     const errorMsg = validateJobInput(body);
     if (errorMsg) {
-      return Response.json({ error: errorMsg }, { status: 400 });
+      return Response.json(
+        { success: false, error: errorMsg },
+        { status: 400 }
+      );
     }
 
     const jobKey = buildJobKey(lead_id, assigned_to);
 
+    // idempotency check
     const { data: existing } = await supabaseServer
       .from("jobs")
       .select("id, lead_id, assigned_to, status")
@@ -53,6 +58,7 @@ export async function POST(req) {
       });
     }
 
+    // insert job
     const { data, error } = await supabaseServer
       .from("jobs")
       .insert({
@@ -67,19 +73,21 @@ export async function POST(req) {
       .single();
 
     if (error) {
-      return Response.json({ error: error.message }, { status: 500 });
+      return Response.json(
+        { success: false, error: error.message },
+        { status: 500 }
+      );
     }
 
     return Response.json({
       success: true,
       job: data,
     });
-
   } catch (err) {
     console.error("Job create error:", err);
 
     return Response.json(
-      { error: "Internal server error" },
+      { success: false, error: "Internal server error" },
       { status: 500 }
     );
   }
@@ -109,7 +117,10 @@ export async function GET(req) {
     const { data, error } = await query;
 
     if (error) {
-      return Response.json({ error: error.message }, { status: 500 });
+      return Response.json(
+        { success: false, error: error.message },
+        { status: 500 }
+      );
     }
 
     return Response.json({
@@ -117,12 +128,11 @@ export async function GET(req) {
       jobs: data || [],
       pagination: { limit, offset },
     });
-
   } catch (err) {
     console.error("Job fetch error:", err);
 
     return Response.json(
-      { error: "Failed to fetch jobs" },
+      { success: false, error: "Failed to fetch jobs" },
       { status: 500 }
     );
   }
