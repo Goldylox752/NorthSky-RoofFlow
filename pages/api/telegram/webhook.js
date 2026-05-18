@@ -5,7 +5,6 @@ export const config = {
 };
 
 export default async function handler(req, res) {
-  // Telegram only sends POST requests
   if (req.method !== "POST") {
     return res.status(200).json({ ok: true });
   }
@@ -34,9 +33,7 @@ export default async function handler(req, res) {
       `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           chat_id: chatId,
           text: reply,
@@ -45,8 +42,8 @@ export default async function handler(req, res) {
     );
 
     return res.status(200).json({ ok: true });
-  } catch (error) {
-    console.error("Webhook error:", error);
+  } catch (err) {
+    console.error(err);
     return res.status(200).json({ ok: true });
   }
 }
