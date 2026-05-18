@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 // ===============================
 // 🧼 VALIDATION
 // ===============================
-function validateJobInput(body: any) {
+function validateJobInput(body) {
   const { lead_id, assigned_to } = body;
 
   if (!lead_id || !assigned_to) {
@@ -18,20 +18,20 @@ function validateJobInput(body: any) {
 // ===============================
 // 🔐 IDEMPOTENCY KEY
 // ===============================
-function buildJobKey(lead_id: string, assigned_to: string) {
+function buildJobKey(lead_id, assigned_to) {
   return `job:${lead_id}:${assigned_to}`;
 }
 
 // ===============================
 // POST - CREATE JOB
 // ===============================
-export async function POST(req: Request) {
+export async function POST(req) {
   try {
     const body = await req.json();
 
-    const { lead_id, assigned_to, status = "pending" } = body;
+    const { lead_id, assigned_to, status } = body;
+    const finalStatus = status || "pending";
 
-    // Validate
     const errorMsg = validateJobInput(body);
     if (errorMsg) {
       return Response.json({ error: errorMsg }, { status: 400 });
@@ -39,7 +39,6 @@ export async function POST(req: Request) {
 
     const jobKey = buildJobKey(lead_id, assigned_to);
 
-    // Check existing job (idempotency)
     const { data: existing } = await supabaseServer
       .from("jobs")
       .select("id, lead_id, assigned_to, status")
@@ -54,13 +53,12 @@ export async function POST(req: Request) {
       });
     }
 
-    // Create job
     const { data, error } = await supabaseServer
       .from("jobs")
       .insert({
         lead_id,
         assigned_to,
-        status,
+        status: finalStatus,
         idempotency_key: jobKey,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -76,6 +74,7 @@ export async function POST(req: Request) {
       success: true,
       job: data,
     });
+
   } catch (err) {
     console.error("Job create error:", err);
 
@@ -89,12 +88,12 @@ export async function POST(req: Request) {
 // ===============================
 // GET - LIST JOBS
 // ===============================
-export async function GET(req: Request) {
+export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url);
 
-    const limit = Math.min(parseInt(searchParams.get("limit") || "50"), 100);
-    const offset = parseInt(searchParams.get("offset") || "0");
+    const limit = Math.min(Number(searchParams.get("limit") || 50), 100);
+    const offset = Number(searchParams.get("offset") || 0);
     const status = searchParams.get("status");
 
     let query = supabaseServer
@@ -116,11 +115,9 @@ export async function GET(req: Request) {
     return Response.json({
       success: true,
       jobs: data || [],
-      pagination: {
-        limit,
-        offset,
-      },
+      pagination: { limit, offset },
     });
+
   } catch (err) {
     console.error("Job fetch error:", err);
 
