@@ -1,8 +1,8 @@
-const WEIGHTS = {
+const DEFAULT_WEIGHTS = {
   city: {
-    Vancouver: 25,
-    Calgary: 20,
-    Edmonton: 18,
+    vancouver: 25,
+    calgary: 20,
+    edmonton: 18,
   },
 
   type: {
@@ -23,61 +23,92 @@ const WEIGHTS = {
     hasEmail: 5,
     hasWebsite: 8,
   },
+
+  trust: {
+    ratingBoost: 10,
+    reviewsBoost: 5,
+  },
 };
 
-function clamp(score, min = 0, max = 100) {
-  return Math.max(min, Math.min(max, score));
-}
+/* =========================================================
+   UTILS
+========================================================= */
 
 function normalize(value) {
-  return (value || "").toString().toLowerCase();
+  return (value || "")
+    .toString()
+    .toLowerCase()
+    .trim();
 }
 
+function clamp(value, min = 0, max = 100) {
+  return Math.max(min, Math.min(max, value));
+}
+
+/* =========================================================
+   FEATURE EXTRACTOR (future ML-ready)
+========================================================= */
+
+function extractLeadFeatures(lead) {
+  return {
+    city: normalize(lead.city),
+    type: normalize(lead.type),
+    urgency: normalize(lead.urgency),
+
+    hasPhone: Boolean(lead.hasPhone),
+    hasEmail: Boolean(lead.hasEmail),
+    hasWebsite: Boolean(lead.hasWebsite),
+
+    rating: Number(lead.rating || 0),
+    reviews: Number(lead.reviews || 0),
+  };
+}
+
+/* =========================================================
+   CORE SCORING ENGINE
+========================================================= */
+
 function scoreLead(lead) {
+  const f = extractLeadFeatures(lead);
   let score = 0;
 
-  const city = normalize(lead.city);
-  const type = normalize(lead.type);
-  const urgency = normalize(lead.urgency);
+  /* -------------------------------
+     BASE CATEGORY SIGNALS
+  ------------------------------- */
+  score += DEFAULT_WEIGHTS.city[f.city] || 0;
+  score += DEFAULT_WEIGHTS.type[f.type] || 0;
+  score += DEFAULT_WEIGHTS.urgency[f.urgency] || 0;
 
-  /* ===============================
-     CITY SCORE
-  =============================== */
-  score += WEIGHTS.city[city] || 0;
+  /* -------------------------------
+     CONTACT QUALITY SIGNALS
+  ------------------------------- */
+  if (f.hasPhone) score += DEFAULT_WEIGHTS.signals.hasPhone;
+  if (f.hasEmail) score += DEFAULT_WEIGHTS.signals.hasEmail;
+  if (f.hasWebsite) score += DEFAULT_WEIGHTS.signals.hasWebsite;
 
-  /* ===============================
-     TYPE SCORE
-  =============================== */
-  score += WEIGHTS.type[type] || 0;
-
-  /* ===============================
-     URGENCY SCORE
-  =============================== */
-  score += WEIGHTS.urgency[urgency] || 0;
-
-  /* ===============================
-     CONTACT QUALITY
-  =============================== */
-  if (lead.hasPhone) score += WEIGHTS.signals.hasPhone;
-  if (lead.hasEmail) score += WEIGHTS.signals.hasEmail;
-  if (lead.hasWebsite) score += WEIGHTS.signals.hasWebsite;
-
-  /* ===============================
-     BONUS LOGIC (FUTURE AI HOOK)
-  =============================== */
-
-  if (lead.rating && lead.rating >= 4.5) {
-    score += 10;
+  /* -------------------------------
+     TRUST SIGNALS (business quality)
+  ------------------------------- */
+  if (f.rating >= 4.5) {
+    score += DEFAULT_WEIGHTS.trust.ratingBoost;
   }
 
-  if (lead.reviews && lead.reviews > 50) {
-    score += 5;
+  if (f.reviews > 50) {
+    score += DEFAULT_WEIGHTS.trust.reviewsBoost;
   }
 
-  /* ===============================
-     FINAL NORMALIZATION
-  =============================== */
+  /* -------------------------------
+     FUTURE AI HOOK (IMPORTANT)
+     - later replace with ML model score
+  ------------------------------- */
+  // score += mlModel.predict(f);
+
+  /* -------------------------------
+     FINAL OUTPUT
+  ------------------------------- */
   return clamp(score);
 }
 
-module.exports = { scoreLead };
+module.exports = {
+  scoreLead,
+};
