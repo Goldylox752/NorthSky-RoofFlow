@@ -1,15 +1,25 @@
-export async function bootstrapApp() {
-  console.log("[bootstrap] system starting...");
+const auth = require("../middleware/auth");
 
-  await withRetry("queue", bootstrapQueue, 5, true);
-  await withRetry("metering", bootstrapMetering, 3, true);
-  await withRetry("call-center", bootstrapCallCenter, 3, true);
+function bootstrapExpress(app) {
+  console.log("[express] initializing...");
 
-  await withRetry("events", bootstrapEvents, 3, false);
-  await withRetry("stripe", bootstrapStripe, 3, true);
-  await withRetry("telegram", bootstrapTelegram, 3, false);
+  // 1. PUBLIC ROUTES FIRST
+  app.post("/api/telegram/webhook", require("../webhooks/telegram"));
 
-  await withRetry("cron", bootstrapCron, 2, false);
+  app.post("/stripe-webhook",
+    require("express").raw({ type: "application/json" }),
+    require("../webhooks/stripe")
+  );
 
-  console.log("[bootstrap] SYSTEM READY");
+  // 2. AUTH APPLIED AFTER WEBHOOKS
+  app.use("/api", auth);
+
+  // 3. PROTECTED ROUTES
+  app.get("/api/health", (req, res) => {
+    res.json({ ok: true });
+  });
+
+  console.log("[express] ready");
 }
+
+module.exports = bootstrapExpress;
