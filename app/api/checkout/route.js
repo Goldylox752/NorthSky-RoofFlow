@@ -1,42 +1,70 @@
 import Stripe from "stripe";
 
+export const runtime = "nodejs";
+
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: "2024-06-20",
 });
 
 const BASE_URL = process.env.CLIENT_URL?.trim();
 
+/* ===============================
+   SAFETY CHECK (fail fast)
+=============================== */
+
+if (!process.env.STRIPE_SECRET_KEY) {
+  throw new Error("Missing STRIPE_SECRET_KEY");
+}
+
 if (!BASE_URL) {
-  console.error("Missing CLIENT_URL environment variable");
+  throw new Error("Missing CLIENT_URL");
 }
 
 /* ===============================
    PRICING (SERVER TRUTH)
 =============================== */
 
-const PRICES = {
+const PRICES = Object.freeze({
   starter: { amount: 1000, name: "Starter" },
   growth: { amount: 2000, name: "Growth" },
   elite: { amount: 5000, name: "Elite" },
-};
+});
 
 /* ===============================
    HELPERS
 =============================== */
 
-const clean = (v) =>
-  typeof v === "string" ? v.trim().toLowerCase() : "starter";
+const cleanPlan = (plan) =>
+  typeof plan === "string" ? plan.trim().toLowerCase() : "starter";
 
 /* ===============================
    ROUTE
 =============================== */
 
 export async function POST(req) {
-  try {
-    const body = await req.json();
+  const startedAt = Date.now();
 
-    const plan = clean(body.plan);
+  try {
+    /* ===============================
+       PARSE REQUEST SAFELY
+    =============================== */
+
+    let body;
+    try {
+      body = await req.json();
+    } catch {
+      return Response.json(
+        { success: false, error: "invalid_json" },
+        { status: 400 }
+      );
+    }
+
+    const plan = cleanPlan(body.plan);
     const userId = body.userId;
+
+    /* ===============================
+       VALIDATION
+    =============================== */
 
     if (!userId) {
       return Response.json(
@@ -54,18 +82,9 @@ export async function POST(req) {
       );
     }
 
-    // ===============================
-    // OPTIONAL: fetch user from Supabase (if needed later)
-    // ===============================
-    // const { data: user } = await supabase
-    //   .from("users")
-    //   .select("stripe_customer_id")
-    //   .eq("auth_id", userId)
-    //   .single();
-
-    // ===============================
-    // CREATE CHECKOUT SESSION
-    // ===============================
+    /* ===============================
+       CREATE CHECKOUT SESSION
+    =============================== */
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -79,7 +98,7 @@ export async function POST(req) {
             currency: "usd",
             unit_amount: pricing.amount,
             product_data: {
-              name: `RoofFlow — ${plan}`,
+              name: `RoofFlow — ${pricing.name}`,
               description: "AI Roofing Pipeline Platform",
             },
           },
@@ -94,16 +113,28 @@ export async function POST(req) {
 
       success_url: `${BASE_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${BASE_URL}/cancel`,
+
+      // prevents stale sessions hanging around
+      expires_at: Math.floor(Date.now() / 1000) + 1800,
     });
 
     if (!session?.url) {
       throw new Error("Stripe session creation failed");
     }
 
+    /* ===============================
+       RESPONSE
+    =============================== */
+
     return Response.json({
       success: true,
       url: session.url,
       sessionId: session.id,
+      meta: {
+        plan,
+        amount: pricing.amount,
+        processingTimeMs: Date.now() - startedAt,
+      },
     });
   } catch (err) {
     console.error("[checkout error]", err);
@@ -111,7 +142,8 @@ export async function POST(req) {
     return Response.json(
       {
         success: false,
-        error: err.message || "checkout_failed",
+        error: "checkout_failed",
+        message: err.message,
       },
       { status: 500 }
     );
