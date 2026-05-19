@@ -1,223 +1,95 @@
-const crypto = require("crypto");
-
-const stripe = require("../../lib/stripe");
-const supabase = require("../../lib/supabase");
-
-/* ===============================
-   ENV CONFIG
-=============================== */
+import { NextResponse } from "next/server";
+import crypto from "crypto";
+import stripe from "@/lib/stripe";
+import supabase from "@/lib/supabase";
 
 const BASE_URL = process.env.CLIENT_URL?.trim();
 
-if (!BASE_URL) {
-  throw new Error("Missing CLIENT_URL environment variable");
-}
+const PRICES = {
+  starter: { amount: 1000 },
+  growth: { amount: 2000 },
+  elite: { amount: 5000 },
+};
 
-/* ===============================
-   PRICING (SERVER SOURCE OF TRUTH)
-=============================== */
+const clean = (v: string) =>
+  typeof v === "string" ? v.trim().toLowerCase() : "starter";
 
-const PRICES = Object.freeze({
-  starter: { amount: 1000, name: "Starter" },
-  growth: { amount: 2000, name: "Growth" },
-  elite: { amount: 5000, name: "Elite" },
-});
+const generateIdempotencyKey = ({ userId, plan, amount }: any) =>
+  crypto.createHash("sha256").update(`${userId}:${plan}:${amount}`).digest("hex");
 
-/* ===============================
-   HELPERS
-=============================== */
-
-const clean = (v) =>
-  typeof v === "string" && v.trim() ? v.trim().toLowerCase() : null;
-
-const getIp = (req) =>
-  req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
-  req.ip ||
-  null;
-
-const generateIdempotencyKey = ({ userId, plan, amount }) =>
-  crypto
-    .createHash("sha256")
-    .update(`${userId}:${plan}:${amount}`)
-    .digest("hex");
-
-/* ===============================
-   STRIPE CUSTOMER LOOKUP
-=============================== */
-
-async function getStripeCustomer(authId) {
-  const { data, error } = await supabase
-    .from("users")
-    .select("stripe_customer_id, email")
-    .eq("auth_id", authId)
-    .maybeSingle();
-
-  if (error) throw new Error("Customer lookup failed");
-  if (!data?.stripe_customer_id) {
-    throw new Error("Missing Stripe customer");
-  }
-
-  return data;
-}
-
-/* ===============================
-   CREATE STRIPE CHECKOUT SESSION
-=============================== */
-
-async function createStripeSession({
-  customerId,
-  authId,
-  plan,
-  amount,
-}) {
-  const idempotencyKey = generateIdempotencyKey({
-    userId: authId,
-    plan,
-    amount,
-  });
-
-  return stripe.checkout.sessions.create(
-    {
-      mode: "payment",
-
-      customer: customerId,
-
-      payment_method_types: ["card"],
-
-      billing_address_collection: "auto",
-      allow_promotion_codes: true,
-
-      line_items: [
-        {
-          quantity: 1,
-          price_data: {
-            currency: "usd",
-            unit_amount: amount,
-            product_data: {
-              name: `Flow OS — ${plan}`,
-              description: "SaaS access + automation platform",
-            },
-          },
-        },
-      ],
-
-      metadata: {
-        auth_id: authId,
-        plan,
-        amount: String(amount),
-      },
-
-      success_url: `${BASE_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${BASE_URL}/cancel`,
-
-      expires_at: Math.floor(Date.now() / 1000) + 60 * 30,
-    },
-    {
-      idempotencyKey,
-    }
-  );
-}
-
-/* ===============================
-   CHECKOUT CONTROLLER
-=============================== */
-
-async function checkout(req, res) {
-  const startedAt = Date.now();
-
+export async function POST(req: Request) {
   try {
-    /* ===============================
-       AUTH
-    =============================== */
+    const body = await req.json();
 
-    const user = req.user;
+    const userId = body.userId;
+    const plan = clean(body.plan);
+    const pricing = PRICES[plan as keyof typeof PRICES];
 
-    if (!user?.id) {
-      return res.status(401).json({
-        success: false,
-        error: "unauthorized",
-      });
+    if (!userId) {
+      return NextResponse.json({ success: false, error: "unauthorized" }, { status: 401 });
     }
-
-    /* ===============================
-       PLAN VALIDATION
-    =============================== */
-
-    const plan = clean(req.body?.plan) || "starter";
-    const pricing = PRICES[plan];
 
     if (!pricing) {
-      return res.status(400).json({
-        success: false,
-        error: "invalid_plan",
-      });
+      return NextResponse.json({ success: false, error: "invalid_plan" }, { status: 400 });
     }
 
-    /* ===============================
-       STRIPE CUSTOMER
-    =============================== */
+    const { data: user } = await supabase
+      .from("users")
+      .select("stripe_customer_id")
+      .eq("auth_id", userId)
+      .single();
 
-    const customer = await getStripeCustomer(user.id);
+    if (!user?.stripe_customer_id) {
+      return NextResponse.json({ success: false, error: "missing_customer" }, { status: 400 });
+    }
 
-    /* ===============================
-       CREATE CHECKOUT SESSION
-    =============================== */
-
-    const session = await createStripeSession({
-      customerId: customer.stripe_customer_id,
-      authId: user.id,
+    const idempotencyKey = generateIdempotencyKey({
+      userId,
       plan,
       amount: pricing.amount,
     });
 
-    if (!session?.url) {
-      throw new Error("Stripe session creation failed");
-    }
+    const session = await stripe.checkout.sessions.create(
+      {
+        mode: "payment",
+        customer: user.stripe_customer_id,
+        payment_method_types: ["card"],
 
-    /* ===============================
-       AUDIT LOG (SAFE NON-BLOCKING)
-    =============================== */
+        line_items: [
+          {
+            quantity: 1,
+            price_data: {
+              currency: "usd",
+              unit_amount: pricing.amount,
+              product_data: {
+                name: `RoofFlow — ${plan}`,
+              },
+            },
+          },
+        ],
 
-    supabase
-      .from("checkout_logs")
-      .insert({
-        auth_id: user.id,
-        stripe_session_id: session.id,
-        plan,
-        amount: pricing.amount,
-        ip_address: getIp(req),
-        user_agent: req.headers["user-agent"] || null,
-        created_at: new Date().toISOString(),
-      })
-      .then(({ error }) => {
-        if (error) console.error("audit_log_error", error.message);
-      });
+        metadata: {
+          auth_id: userId,
+          plan,
+          amount: String(pricing.amount),
+        },
 
-    /* ===============================
-       RESPONSE
-    =============================== */
+        success_url: `${BASE_URL}/success`,
+        cancel_url: `${BASE_URL}/cancel`,
+      },
+      { idempotencyKey }
+    );
 
-    return res.json({
+    return NextResponse.json({
       success: true,
-      checkout: {
-        url: session.url,
-        sessionId: session.id,
-        plan,
-        amount: pricing.amount,
-        currency: "usd",
-      },
-      meta: {
-        processingTimeMs: Date.now() - startedAt,
-      },
+      url: session.url,
     });
-  } catch (err) {
-    console.error("[checkout] error:", err);
 
-    return res.status(500).json({
-      success: false,
-      error: err.message || "checkout_failed",
-    });
+  } catch (err: any) {
+    console.error(err);
+    return NextResponse.json(
+      { success: false, error: err.message },
+      { status: 500 }
+    );
   }
 }
-
-module.exports = checkout;
