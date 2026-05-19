@@ -1,96 +1,55 @@
-const express = require("express");
-const Stripe = require("stripe");
+import Stripe from "stripe";
 
-const router = express.Router();
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+  apiVersion: "2024-06-20",
+});
 
-/* ===============================
-   STRIPE WEBHOOK ROUTE
-   - RAW BODY REQUIRED
-   - SIGNATURE VERIFIED
-   - IDEMPOTENT READY (hook this into DB later)
-   - FORWARDS EVENTS TO CALL CENTER
-=============================== */
+export const runtime = "nodejs";
 
-router.post(
-  "/",
-  express.raw({ type: "application/json" }),
-  async (req, res) => {
-    const signature = req.headers["stripe-signature"];
+export async function POST(req) {
+  try {
+    const signature = req.headers.get("stripe-signature");
 
     if (!signature) {
-      return res.status(400).json({
-        success: false,
-        error: "missing_signature",
-      });
+      return Response.json(
+        { success: false, error: "missing_signature" },
+        { status: 400 }
+      );
     }
+
+    const body = await req.text();
 
     let event;
 
-    /* ===============================
-       VERIFY STRIPE SIGNATURE
-    =============================== */
     try {
       event = stripe.webhooks.constructEvent(
-        req.body,
+        body,
         signature,
         process.env.STRIPE_WEBHOOK_SECRET
       );
     } catch (err) {
       console.error("[stripe webhook] invalid signature:", err.message);
 
-      return res.status(400).json({
-        success: false,
-        error: "invalid_signature",
-      });
+      return Response.json(
+        { success: false, error: "invalid_signature" },
+        { status: 400 }
+      );
     }
 
-    try {
-      const data = event.data.object;
+    const data = event.data.object;
 
-      /* ===============================
-         EVENT ROUTING LAYER
-         (send EVERYTHING to call center)
-      =============================== */
-      const { dispatchLead } = require("../../call-center/dispatch");
+    try {
+      const { dispatchLead } = await import("@/call-center/dispatch");
 
       switch (event.type) {
         case "checkout.session.completed":
-          await dispatchLead({
-            source: "stripe",
-            type: "checkout.session.completed",
-            data,
-          });
-          break;
-
         case "payment_intent.succeeded":
-          await dispatchLead({
-            source: "stripe",
-            type: "payment_intent.succeeded",
-            data,
-          });
-          break;
-
         case "customer.subscription.updated":
-          await dispatchLead({
-            source: "stripe",
-            type: "customer.subscription.updated",
-            data,
-          });
-          break;
-
         case "customer.subscription.deleted":
-          await dispatchLead({
-            source: "stripe",
-            type: "customer.subscription.deleted",
-            data,
-          });
-          break;
-
         case "invoice.paid":
           await dispatchLead({
             source: "stripe",
-            type: "invoice.paid",
+            type: event.type,
             data,
           });
           break;
@@ -99,19 +58,24 @@ router.post(
           console.log("[stripe webhook] unhandled event:", event.type);
       }
 
-      return res.json({
+      return Response.json({
         success: true,
         received: true,
       });
     } catch (err) {
       console.error("[stripe webhook] processing error:", err);
 
-      return res.status(500).json({
-        success: false,
-        error: "webhook_processing_failed",
-      });
+      return Response.json(
+        { success: false, error: "webhook_processing_failed" },
+        { status: 500 }
+      );
     }
-  }
-);
+  } catch (err) {
+    console.error("[stripe webhook] fatal error:", err);
 
-module.exports = router;
+    return Response.json(
+      { success: false, error: "server_error" },
+      { status: 500 }
+    );
+  }
+}
