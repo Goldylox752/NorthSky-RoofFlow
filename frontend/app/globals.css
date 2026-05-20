@@ -3,32 +3,42 @@
 @tailwind utilities;
 
 /* ===============================
-   ROOT VARIABLES
+   DESIGN TOKENS
 =============================== */
 
 :root {
-  --background: #050816;
-  --foreground: #ffffff;
+  /* Backgrounds */
+  --bg: #050816;
+  --surface: rgba(255, 255, 255, 0.05);
+  --surface-2: rgba(255, 255, 255, 0.08);
 
-  --card: rgba(255, 255, 255, 0.05);
-  --card-border: rgba(255, 255, 255, 0.08);
+  /* Text */
+  --text: #ffffff;
+  --text-muted: #a1a1aa;
 
+  /* Brand */
   --primary: #6366f1;
-  --primary-foreground: #ffffff;
-
-  --muted: #a1a1aa;
   --accent: #8b5cf6;
 
-  --radius: 16px;
+  /* Borders */
+  --border: rgba(255, 255, 255, 0.08);
+
+  /* Radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+
+  /* Effects */
+  --blur: 24px;
 }
 
 /* ===============================
-   GLOBAL RESET
+   BASE RESET
 =============================== */
 
 * {
   box-sizing: border-box;
-  border-color: rgba(255, 255, 255, 0.08);
+  border-color: var(--border);
 }
 
 html {
@@ -39,41 +49,27 @@ html,
 body {
   margin: 0;
   padding: 0;
-
-  background: var(--background);
-  color: var(--foreground);
-
   min-height: 100vh;
   overflow-x: hidden;
 
-  font-family:
-    Inter,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
+  background: var(--bg);
+  color: var(--text);
+
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
 
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
 /* ===============================
-   BODY BACKGROUND
+   BACKGROUND SYSTEM
 =============================== */
 
 body {
   background-image:
-    radial-gradient(
-      circle at top left,
-      rgba(99, 102, 241, 0.18),
-      transparent 30%
-    ),
-    radial-gradient(
-      circle at bottom right,
-      rgba(168, 85, 247, 0.14),
-      transparent 35%
-    );
+    radial-gradient(circle at top left, rgba(99, 102, 241, 0.15), transparent 35%),
+    radial-gradient(circle at bottom right, rgba(168, 85, 247, 0.12), transparent 40%);
 
   background-attachment: fixed;
 }
@@ -82,12 +78,7 @@ body {
    TYPOGRAPHY
 =============================== */
 
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
+h1, h2, h3, h4, h5, h6 {
   margin: 0;
   font-weight: 600;
   letter-spacing: -0.03em;
@@ -95,6 +86,7 @@ h6 {
 
 p {
   line-height: 1.7;
+  color: var(--text-muted);
 }
 
 /* ===============================
@@ -108,7 +100,7 @@ a {
 }
 
 a:hover {
-  opacity: 0.9;
+  opacity: 0.85;
 }
 
 /* ===============================
@@ -142,34 +134,82 @@ button {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(99, 102, 241, 0.5);
+  background: rgba(99, 102, 241, 0.45);
   border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(99, 102, 241, 0.8);
+  background: rgba(99, 102, 241, 0.7);
 }
 
 /* ===============================
-   UTILITIES
+   DESIGN SYSTEM COMPONENTS
 =============================== */
 
-.glass {
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+/* Card */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
 }
 
+/* Glass effect */
+.glass {
+  background: var(--surface);
+  backdrop-filter: blur(var(--blur));
+  border: 1px solid var(--border);
+}
+
+/* Buttons */
+.btn {
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--primary);
+  color: white;
+  font-weight: 500;
+  transition: opacity 0.2s ease, transform 0.1s ease;
+}
+
+.btn:hover {
+  opacity: 0.9;
+}
+
+.btn:active {
+  transform: scale(0.98);
+}
+
+/* Inputs */
+.input {
+  width: 100%;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  outline: none;
+}
+
+.input::placeholder {
+  color: var(--text-muted);
+}
+
+/* ===============================
+   UTILITY EFFECTS
+=============================== */
+
+/* Gradient text */
 .gradient-text {
   background: linear-gradient(to right, #818cf8, #c084fc);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
+/* Grid background */
 .grid-bg {
   background-image:
     linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
-
   background-size: 40px 40px;
 }
