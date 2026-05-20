@@ -7,24 +7,17 @@ import { calculateLeadPrice } from "@/server/engines/pricing.engine";
    MAIN ORCHESTRATOR
 =============================== */
 
-export async function processLead(input: {
-  name?: string;
-  email?: string;
-  phone?: string;
-  city?: string;
-  source?: string;
-  systemMetrics?: any;
-}) {
+export async function processLead(input) {
   const startTime = Date.now();
 
   /* ===============================
      1. VALIDATION
   =============================== */
-  if (!input.email && !input.phone) {
+  if (!input || (!input.email && !input.phone)) {
     throw new Error("Email or phone required");
   }
 
-  const email = input.email?.trim().toLowerCase() || null;
+  const email = input.email ? input.email.trim().toLowerCase() : null;
 
   /* ===============================
      2. DEDUPE CHECK
@@ -95,9 +88,9 @@ export async function processLead(input: {
   const { data: lead, error } = await supabase
     .from("leads")
     .insert({
-      name: input.name,
+      name: input.name || null,
       email,
-      phone: input.phone,
+      phone: input.phone || null,
       city: input.city || "unknown",
 
       score,
