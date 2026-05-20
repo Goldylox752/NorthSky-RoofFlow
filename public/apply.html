@@ -12,6 +12,7 @@ export default async function handler(req, res) {
 
   try {
     const body = req.body || {};
+
     const {
       name,
       phone,
@@ -26,7 +27,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
-    // 🧠 Qualification rules (centralized)
+    // 🧠 Qualification rules
     const isLowVolume = monthly_jobs === "0-5";
     const noAdSpend = lead_spend === "$0";
 
@@ -34,12 +35,12 @@ export default async function handler(req, res) {
 
     // 💾 Insert into Supabase
     const { error } = await supabase.from("applications").insert({
-      name,
-      phone,
-      email,
-      city,
-      monthly_jobs,
-      lead_spend,
+      name: name ? name.trim() : null,
+      phone: phone ? phone.trim() : null,
+      email: email ? email.trim().toLowerCase() : null,
+      city: city || null,
+      monthly_jobs: monthly_jobs || null,
+      lead_spend: lead_spend || null,
       qualified,
       created_at: new Date().toISOString(),
     });
