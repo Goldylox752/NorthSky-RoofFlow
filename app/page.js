@@ -16,10 +16,20 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
-const SUPPORT_LINK = process.env.NEXT_PUBLIC_TELEGRAM_BOT_URL || "#";
+/* ===============================
+   CONFIG
+=============================== */
+const SUPPORT_LINK =
+  process.env.NEXT_PUBLIC_TELEGRAM_BOT_URL || "#";
 
+const PLANS = ["starter", "growth", "elite"];
+
+/* ===============================
+   MAIN PAGE
+=============================== */
 export default function Page() {
   const [loadingPlan, setLoadingPlan] = useState(null);
+  const [error, setError] = useState(null);
 
   const revenueData = useMemo(
     () => [
@@ -43,9 +53,13 @@ export default function Page() {
     []
   );
 
+  /* ===============================
+     CHECKOUT FLOW (IMPROVED)
+  =============================== */
   const goToCheckout = useCallback(async (plan) => {
     try {
       setLoadingPlan(plan);
+      setError(null);
 
       const res = await fetch("/api/checkout", {
         method: "POST",
@@ -54,9 +68,17 @@ export default function Page() {
       });
 
       const data = await res.json();
-      if (data?.url) window.location.href = data.url;
+
+      if (!res.ok) {
+        throw new Error(data?.error || "Checkout failed");
+      }
+
+      if (data?.url) {
+        window.location.href = data.url;
+      }
     } catch (err) {
       console.error("Checkout error:", err);
+      setError(err.message || "Something went wrong");
     } finally {
       setLoadingPlan(null);
     }
@@ -65,11 +87,17 @@ export default function Page() {
   return (
     <main className="min-h-screen bg-black text-white">
       <Navbar />
+
       <Hero onCheckout={goToCheckout} />
       <ProofBar />
       <ValueSection />
       <Analytics revenueData={revenueData} leadData={leadData} />
-      <Pricing onCheckout={goToCheckout} loadingPlan={loadingPlan} />
+      <Pricing
+        plans={PLANS}
+        onCheckout={goToCheckout}
+        loadingPlan={loadingPlan}
+        error={error}
+      />
       <CTA onCheckout={goToCheckout} />
       <Footer />
     </main>
@@ -178,23 +206,31 @@ function Analytics({ revenueData, leadData }) {
 }
 
 /* ================= PRICING ================= */
-function Pricing({ onCheckout, loadingPlan }) {
-  const plans = ["starter", "growth", "elite"];
-
+function Pricing({ plans, onCheckout, loadingPlan, error }) {
   return (
     <section id="pricing" className="mx-auto max-w-7xl px-6 py-28">
       <h2 className="text-4xl font-semibold">Pricing</h2>
 
+      {error && (
+        <div className="mt-4 text-red-400 text-sm">
+          {error}
+        </div>
+      )}
+
       <div className="mt-10 grid gap-6 md:grid-cols-3">
         {plans.map((plan) => (
-          <Card key={plan} className="border border-white/10 bg-white/5 p-6">
+          <Card
+            key={plan}
+            className="border border-white/10 bg-white/5 p-6"
+          >
             <h3 className="capitalize text-xl">{plan}</h3>
 
             <Button
               className="mt-6 w-full"
+              disabled={loadingPlan !== null}
               onClick={() => onCheckout(plan)}
             >
-              {loadingPlan === plan ? "Loading..." : "Get Started"}
+              {loadingPlan === plan ? "Processing..." : "Get Started"}
             </Button>
           </Card>
         ))}
