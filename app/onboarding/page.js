@@ -13,6 +13,12 @@ export default function Onboarding() {
           "session_id"
         );
 
+        if (!sessionId) {
+          setStatus("Missing session. Please try again.");
+          setLoading(false);
+          return;
+        }
+
         const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
         const res = await fetch(
@@ -26,14 +32,14 @@ export default function Onboarding() {
 
         const data = await res.json();
 
-        if (data.success) {
+        if (data?.success) {
           setStatus("Account activated successfully 🚀");
 
           setTimeout(() => {
             window.location.href = "/dashboard";
-          }, 1500);
+          }, 1200);
         } else {
-          setStatus("Payment verification failed");
+          setStatus(data?.error || "Payment verification failed");
         }
 
       } catch (err) {
@@ -48,7 +54,7 @@ export default function Onboarding() {
   }, []);
 
   return (
-    <div style={{ textAlign: "center", padding: 100 }}>
+    <div style={styles.container}>
       <h1>Setting up your account</h1>
       <p>{status}</p>
 
@@ -56,3 +62,11 @@ export default function Onboarding() {
     </div>
   );
 }
+
+const styles = {
+  container: {
+    textAlign: "center",
+    padding: "100px 20px",
+    fontFamily: "system-ui",
+  },
+};
