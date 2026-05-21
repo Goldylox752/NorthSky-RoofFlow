@@ -1,6 +1,7 @@
 const { routeWorkflow } = require("./workflows/router.workflow");
 
 const DISPATCH_TIMEOUT_MS = 10000;
+const MAX_RETRIES = 1;
 
 /* ===============================
    TIMEOUT WRAPPER
@@ -33,71 +34,110 @@ function validateLead(lead) {
 }
 
 /* ===============================
-   FEATURE EXTRACTION (SIMPLE)
+   FEATURE EXTRACTION (ENHANCED)
 =============================== */
 function extractFeatures(lead) {
+  const text = (lead.text || "").toLowerCase();
+
   return {
-    urgency: (lead.urgency || "medium").toLowerCase(),
-    type: (lead.type || "general").toLowerCase(),
+    urgency:
+      lead.urgency ||
+      (text.includes("urgent") || text.includes("asap")
+        ? "high"
+        : "medium"),
+
+    type:
+      lead.type ||
+      (text.includes("roof") ? "roofing" : "general"),
+
+    intent:
+      text.includes("price") || text.includes("cost")
+        ? "buyer"
+        : text.includes("help")
+        ? "support"
+        : "info",
   };
 }
 
 /* ===============================
-   ROUTE PICKER (SIMPLE MVP)
+   LEAD SCORING (NEW)
 =============================== */
-function pickRoute(features) {
-  if (features.urgency === "high") {
-    return "fastTrack";
-  }
+function scoreLead(features) {
+  let score = 50;
 
-  if (features.type === "roofing") {
-    return "contractorMatch";
-  }
+  if (features.urgency === "high") score += 30;
+  if (features.intent === "buyer") score += 20;
+  if (features.type === "roofing") score += 10;
 
+  return Math.min(score, 100);
+}
+
+/* ===============================
+   ROUTE PICKER (SMART ROUTING)
+=============================== */
+function pickRoute(features, score) {
+  if (score >= 80) return "fastTrack";
+  if (features.type === "roofing") return "contractorMatch";
   return "default";
 }
 
 /* ===============================
-   EXECUTE ROUTE
+   EXECUTE ROUTE (EXTENSIBLE)
 =============================== */
 async function executeRoute(route, lead) {
-  switch (route) {
-    case "fastTrack":
-      return routeWorkflow(lead);
+  const result = await routeWorkflow(lead);
 
-    case "contractorMatch":
-      return routeWorkflow(lead);
-
-    default:
-      return routeWorkflow(lead);
-  }
+  return {
+    routeResult: result,
+  };
 }
 
 /* ===============================
-   MAIN DISPATCH
+   RETRY WRAPPER
+=============================== */
+async function runWithRetry(fn, retries = MAX_RETRIES) {
+  let lastError;
+
+  for (let i = 0; i <= retries; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  throw lastError;
+}
+
+/* ===============================
+   MAIN DISPATCH ENGINE
 =============================== */
 async function dispatchLead(lead) {
   const startTime = Date.now();
-
   const ref = lead?.chatId || "unknown";
 
   try {
     validateLead(lead);
 
     const features = extractFeatures(lead);
+    const score = scoreLead(features);
+    const route = pickRoute(features, score);
 
-    const route = pickRoute(features);
+    console.log(
+      `[brain] route=${route} score=${score} ref=${ref}`
+    );
 
-    console.log(`[brain] route=${route} ref=${ref}`);
-
-    const result = await withTimeout(
-      executeRoute(route, lead),
-      DISPATCH_TIMEOUT_MS
+    const result = await runWithRetry(() =>
+      withTimeout(
+        executeRoute(route, lead),
+        DISPATCH_TIMEOUT_MS
+      )
     );
 
     return {
       success: true,
       route,
+      score,
       duration_ms: Date.now() - startTime,
       ...result,
     };
