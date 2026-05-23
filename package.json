@@ -1,0 +1,12 @@
+{
+  "name": "roof-flow",
+  "version": "1.0.0",
+  "private": true,
+  "description": "RoofFlow live auction static site",
+  "scripts": {
+    "start": "serve -s ."
+  },
+  "dependencies": {
+    "serve": "^14.2.1"
+  }
+}
