@@ -7,22 +7,11 @@ if (!url || !key) {
   throw new Error("Missing Supabase environment variables");
 }
 
-/* ===============================
-   REST-ONLY SAFE CLIENT (NODE 20 SAFE)
-=============================== */
 const supabase = createClient(url, key, {
   auth: {
     persistSession: false,
     autoRefreshToken: false,
     detectSessionInUrl: false,
-  },
-  realtime: {
-    params: {
-      eventsPerSecond: 0,
-    },
-  },
-  db: {
-    schema: "public",
   },
 });
 
