@@ -1,60 +1,69 @@
-# =========================
-# Dependencies
-# =========================
-node_modules/
-
-# =========================
-# Next.js
-# =========================
-.next/
-out/
-dist/
-build/
-
-# =========================
-# Environment variables (CRITICAL)
-# =========================
+# ==========================================
+# 1. Environment & Secret Variables (CRITICAL)
+# ==========================================
+# Never commit real keys, Twilio, or Supabase credentials!
 .env
-.env.local
-.env.development
-.env.production
-.env.test
+.env*.local
+.env.development.local
+.env.test.local
+.env.production.local
 
-# =========================
-# Logs
-# =========================
+# ==========================================
+# 2. Next.js & Build Outputs
+# ==========================================
+/.next/
+/out/
+/build
+/dist
+/.vercel
+
+# ==========================================
+# 3. Dependencies
+# ==========================================
+/node_modules
+/.pnpm-store
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+
+# ==========================================
+# 4. Debug Logs & Testing
+# ==========================================
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+.pnpm-debug.log*
+/coverage
+.nyc_output
 
-# =========================
-# Runtime / cache
-# =========================
-.cache/
-.vercel/
-.turbo/
-coverage/
-
-# =========================
-# OS files
-# =========================
+# ==========================================
+# 5. OS & Editor Junk
+# ==========================================
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 
-# =========================
-# Editor files
-# =========================
-.vscode/
-.idea/
+# IDEs
+/.idea
+/.vscode/*
+!/.vscode/settings.json
+!/.vscode/tasks.json
+!/.vscode/launch.json
+!/.vscode/extensions.json
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
 
-# =========================
-# Testing
-# =========================
-jest-cache/
-
-# =========================
-# Optional: Stripe / API secrets safety
-# =========================
-*.pem
-*.key
+# ==========================================
+# 6. Miscellaneous
+# ==========================================
+*.log
+.swc
+.turbo
