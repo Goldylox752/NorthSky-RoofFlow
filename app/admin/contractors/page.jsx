@@ -1,86 +1,52 @@
-import { createClient } from "@supabase/supabase-js";
+"use client";
+
+import { useState } from "react";
 
 
-export const metadata = {
-  title: "Contractor Admin | RoofFlow",
-  description:
-    "Manage RoofFlow contractor applications and approvals.",
-};
+export default function ContractorTable({ initialContractors }) {
+
+  const [contractors, setContractors] = useState(initialContractors);
 
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+  async function updateStatus(id, status) {
+
+    const response = await fetch(
+      `/api/admin/contractors/${id}`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          status,
+        }),
+      }
+    );
 
 
-
-async function getContractors(){
-
-  const { data, error } = await supabase
-    .from("contractors")
-    .select("*")
-    .order("created_at", {
-      ascending:false,
-    });
+    const data = await response.json();
 
 
-  if(error){
+    if(data.success){
 
-    console.error(error);
-    return [];
+      setContractors((current)=>
+        current.map((contractor)=>
+          contractor.id === id
+          ? {
+              ...contractor,
+              status,
+            }
+          : contractor
+        )
+      );
+
+    }
 
   }
 
 
-  return data;
-
-}
-
-
-
-
-export default async function ContractorsAdminPage(){
-
-
-const contractors = await getContractors();
-
-
 
 return (
-
-<main className="min-h-screen bg-slate-950 text-white">
-
-
-<div className="max-w-7xl mx-auto p-8">
-
-
-
-<div className="mb-10">
-
-
-<p className="text-blue-400 font-semibold">
-RoofFlow Admin
-</p>
-
-
-<h1 className="text-4xl font-bold mt-2">
-Contractor Applications
-</h1>
-
-
-<p className="text-slate-400 mt-2">
-Review and approve roofing companies joining the network.
-</p>
-
-
-</div>
-
-
-
-
-
-
 
 <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
 
@@ -101,11 +67,11 @@ Contact
 </th>
 
 <th className="p-4">
-Service Area
+Area
 </th>
 
 <th className="p-4">
-Jobs / Month
+Jobs
 </th>
 
 <th className="p-4">
@@ -122,7 +88,6 @@ Actions
 
 
 
-
 <tbody>
 
 
@@ -133,7 +98,6 @@ Actions
 key={contractor.id}
 className="border-t border-slate-800"
 >
-
 
 
 <td className="p-4">
@@ -147,7 +111,6 @@ className="border-t border-slate-800"
 </p>
 
 </td>
-
 
 
 
@@ -165,11 +128,9 @@ className="border-t border-slate-800"
 
 
 
-
 <td className="p-4">
 {contractor.service_area}
 </td>
-
 
 
 
@@ -181,7 +142,6 @@ className="border-t border-slate-800"
 
 
 <td className="p-4">
-
 
 <span
 className={`px-3 py-1 rounded-full text-xs ${
@@ -197,9 +157,7 @@ contractor.status === "approved"
 
 </span>
 
-
 </td>
-
 
 
 
@@ -208,23 +166,24 @@ contractor.status === "approved"
 
 
 <button
+onClick={() =>
+updateStatus(contractor.id,"approved")
+}
 className="bg-green-600 hover:bg-green-700 px-3 py-2 rounded-lg text-sm"
 >
-
 Approve
-
 </button>
 
 
 
 <button
+onClick={() =>
+updateStatus(contractor.id,"rejected")
+}
 className="bg-red-600 hover:bg-red-700 px-3 py-2 rounded-lg text-sm"
 >
-
 Reject
-
 </button>
-
 
 
 </td>
@@ -237,7 +196,6 @@ Reject
 ))}
 
 
-
 </tbody>
 
 
@@ -245,17 +203,6 @@ Reject
 
 
 </div>
-
-
-
-
-
-
-
-</div>
-
-
-</main>
 
 );
 
