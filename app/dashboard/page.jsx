@@ -1,96 +1,129 @@
 export const metadata = {
-  title: "Dashboard | RoofFlow",
+  title: "RoofFlow Dashboard | Contractor OS",
   description:
-    "RoofFlow contractor dashboard for managing roofing leads, appointments, and revenue.",
+    "Manage roofing leads, appointments, sales pipeline, AI follow-ups, and revenue with RoofFlow.",
 };
-
 
 
 const stats = [
   {
-    title:"New Leads",
-    value:"48",
-    change:"+18%",
-    icon:"🏠",
+    title: "New Leads",
+    value: "48",
+    change: "+18%",
+    icon: "🏠",
   },
   {
-    title:"Appointments",
-    value:"16",
-    change:"+12%",
-    icon:"📅",
+    title: "Appointments",
+    value: "16",
+    change: "+12%",
+    icon: "📅",
   },
   {
-    title:"Jobs Won",
-    value:"9",
-    change:"+24%",
-    icon:"✅",
+    title: "Jobs Won",
+    value: "9",
+    change: "+24%",
+    icon: "✅",
   },
   {
-    title:"Revenue",
-    value:"$84,500",
-    change:"+31%",
-    icon:"💰",
+    title: "Pipeline Value",
+    value: "$142,500",
+    change: "+31%",
+    icon: "💰",
   },
 ];
-
 
 
 const leads = [
   {
-    name:"Sarah Johnson",
-    location:"Edmonton, AB",
-    service:"Roof Replacement",
-    value:"$12,000",
-    status:"New",
+    name: "Sarah Johnson",
+    location: "Edmonton, AB",
+    service: "Roof Replacement",
+    value: "$12,000",
+    score: "95%",
+    status: "Hot Lead",
   },
   {
-    name:"Mike Thompson",
-    location:"Sherwood Park, AB",
-    service:"Roof Repair",
-    value:"$3,500",
-    status:"Contacted",
+    name: "Mike Thompson",
+    location: "Sherwood Park, AB",
+    service: "Roof Repair",
+    value: "$3,500",
+    score: "82%",
+    status: "Contacted",
   },
   {
-    name:"Westview Home",
-    location:"Leduc, AB",
-    service:"Storm Damage",
-    value:"$18,000",
-    status:"Inspection",
+    name: "Westview Home",
+    location: "Leduc, AB",
+    service: "Storm Damage",
+    value: "$18,000",
+    score: "98%",
+    status: "Inspection",
   },
 ];
-
 
 
 const pipeline = [
   {
-    stage:"New Leads",
-    count:48,
+    stage: "New Leads",
+    count: 48,
+    value: "$85K",
   },
   {
-    stage:"Qualified",
-    count:24,
+    stage: "Qualified",
+    count: 24,
+    value: "$62K",
   },
   {
-    stage:"Inspections",
-    count:12,
+    stage: "Inspections",
+    count: 12,
+    value: "$38K",
   },
   {
-    stage:"Closed Jobs",
-    count:9,
+    stage: "Closed Jobs",
+    count: 9,
+    value: "$142K",
   },
 ];
 
 
-
-export default function DashboardPage(){
-
+export default function DashboardPage() {
 
 return (
 
 <main className="min-h-screen bg-slate-950 text-white">
 
 
-<div className="max-w-7xl mx-auto p-8">
+<div className="flex">
+
+
+{/* Sidebar */}
+
+<aside className="hidden md:block w-64 bg-slate-900 min-h-screen p-6 border-r border-slate-800">
+
+<h2 className="text-2xl font-bold text-blue-400">
+RoofFlow
+</h2>
+
+
+<nav className="mt-10 space-y-4 text-slate-300">
+
+<p>📊 Dashboard</p>
+<p>🏠 Leads</p>
+<p>📅 Appointments</p>
+<p>💰 Revenue</p>
+<p>🤖 AI Assistant</p>
+<p>⚙️ Settings</p>
+
+</nav>
+
+</aside>
+
+
+
+
+
+{/* Main */}
+
+<div className="flex-1 p-8 max-w-7xl">
 
 
 
@@ -102,7 +135,7 @@ return (
 <div>
 
 <p className="text-blue-400 font-semibold">
-RoofFlow Contractor Portal
+RoofFlow Contractor OS
 </p>
 
 
@@ -112,23 +145,19 @@ Welcome Back 👋
 
 
 <p className="text-slate-400 mt-2">
-Manage your roofing business growth.
+Your roofing business growth command center.
 </p>
-
 
 </div>
 
 
 
 <button className="bg-blue-600 hover:bg-blue-700 px-5 py-3 rounded-lg">
-
 + Add Lead
-
 </button>
 
 
 </div>
-
 
 
 
@@ -146,7 +175,6 @@ Manage your roofing business growth.
 key={stat.title}
 className="bg-slate-900 border border-slate-800 rounded-xl p-6"
 >
-
 
 <div className="text-3xl">
 {stat.icon}
@@ -186,9 +214,8 @@ className="bg-slate-900 border border-slate-800 rounded-xl p-6"
 
 <section className="mt-10">
 
-
 <h2 className="text-2xl font-bold mb-5">
-Sales Pipeline
+Revenue Pipeline
 </h2>
 
 
@@ -196,7 +223,6 @@ Sales Pipeline
 
 
 {pipeline.map((item)=>(
-
 
 <div
 key={item.stage}
@@ -214,17 +240,19 @@ className="bg-slate-900 border border-slate-800 rounded-xl p-5"
 </h3>
 
 
-</div>
+<p className="text-blue-400 mt-2">
+{item.value}
+</p>
 
+
+</div>
 
 ))}
 
 
 </div>
 
-
 </section>
-
 
 
 
@@ -237,19 +265,16 @@ className="bg-slate-900 border border-slate-800 rounded-xl p-5"
 
 <section className="mt-10">
 
-
 <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
 
 
 <div className="p-6">
 
 <h2 className="text-2xl font-bold">
-Recent Leads
+Lead Marketplace
 </h2>
 
 </div>
-
-
 
 
 <table className="w-full">
@@ -259,30 +284,15 @@ Recent Leads
 
 <tr className="text-left">
 
-<th className="p-4">
-Customer
-</th>
-
-<th className="p-4">
-Location
-</th>
-
-<th className="p-4">
-Service
-</th>
-
-<th className="p-4">
-Value
-</th>
-
-<th className="p-4">
-Status
-</th>
+<th className="p-4">Customer</th>
+<th className="p-4">Service</th>
+<th className="p-4">Value</th>
+<th className="p-4">AI Score</th>
+<th className="p-4">Status</th>
 
 </tr>
 
 </thead>
-
 
 
 <tbody>
@@ -290,20 +300,16 @@ Status
 
 {leads.map((lead)=>(
 
-
 <tr
 key={lead.name}
 className="border-t border-slate-800"
 >
 
-
 <td className="p-4 font-semibold">
 {lead.name}
-</td>
-
-
-<td className="p-4 text-slate-400">
+<p className="text-sm text-slate-400">
 {lead.location}
+</p>
 </td>
 
 
@@ -317,17 +323,17 @@ className="border-t border-slate-800"
 </td>
 
 
+<td className="p-4 text-blue-400">
+{lead.score}
+</td>
+
+
 <td className="p-4">
-
-<span className="bg-blue-500/20 text-blue-400 px-3 py-1 rounded-full text-xs">
 {lead.status}
-</span>
-
 </td>
 
 
 </tr>
-
 
 ))}
 
@@ -350,7 +356,7 @@ className="border-t border-slate-800"
 
 
 
-{/* AI Assistant */}
+{/* AI */}
 
 <section className="mt-10">
 
@@ -359,22 +365,20 @@ className="border-t border-slate-800"
 
 
 <h2 className="text-3xl font-bold">
-🤖 RoofFlow AI Assistant
+🤖 RoofFlow AI Sales Assistant
 </h2>
 
 
 <p className="mt-3 text-blue-100">
 
-"3 homeowners need follow-up today. 
-Your highest opportunity is the Edmonton storm repair lead."
+3 homeowners need follow-up today.
+AI recommends calling the Edmonton storm damage lead first.
 
 </p>
 
 
 <button className="mt-6 bg-white text-blue-600 px-6 py-3 rounded-lg font-bold">
-
-View Recommendations
-
+Generate Action Plan
 </button>
 
 
@@ -383,6 +387,8 @@ View Recommendations
 
 </section>
 
+
+</div>
 
 
 </div>
