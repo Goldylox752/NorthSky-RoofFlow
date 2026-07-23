@@ -1,86 +1,82 @@
 import Link from "next/link";
 
-
 export const metadata = {
-  title: "RoofFlow | Book More Roofing Jobs Automatically",
+  title: "RoofFlow | AI Roofing Sales Platform | Book More Roofing Jobs",
   description:
-    "RoofFlow helps roofing contractors get qualified leads, automate follow-ups, and grow revenue with AI-powered roofing sales systems.",
+    "RoofFlow helps roofing contractors generate qualified homeowner leads, automate sales follow-ups, book inspections, and grow revenue with AI-powered roofing technology.",
 };
-
-
 
 const features = [
   {
-    title: "Qualified Roofing Leads",
+    title: "Exclusive Roofing Leads",
     description:
-      "Receive homeowner opportunities ready for roofing quotes and inspections.",
+      "Get homeowner opportunities looking for roof repairs, replacements, inspections, and estimates.",
     icon: "🏠",
   },
   {
-    title: "AI Lead Follow-Up",
+    title: "AI Roofing Receptionist",
     description:
-      "Automatically respond, qualify, and schedule appointments with prospects.",
+      "Automatically answer questions, qualify homeowners, and schedule appointments 24/7.",
     icon: "🤖",
   },
   {
-    title: "Contractor Dashboard",
+    title: "Contractor CRM",
     description:
-      "Manage leads, jobs, appointments, and revenue from one platform.",
-    icon: "📊",
+      "Manage leads, appointments, customers, and sales pipelines from one dashboard.",
+    icon: "📋",
   },
   {
-    title: "Growth Analytics",
+    title: "Revenue Analytics",
     description:
-      "Track campaigns, conversions, and your highest-performing channels.",
+      "Track lead sources, conversion rates, booked jobs, and company growth.",
     icon: "📈",
   },
 ];
 
 
-
 const stats = [
   {
-    value: "10,000+",
-    label: "Potential Homeowners",
-  },
-  {
     value: "24/7",
-    label: "AI Lead Response",
+    label: "AI Customer Response",
   },
   {
     value: "3x",
-    label: "More Follow-Ups",
+    label: "More Lead Follow-Up",
+  },
+  {
+    value: "10,000+",
+    label: "Homeowner Opportunities",
   },
   {
     value: "$1M+",
-    label: "Revenue Opportunity",
+    label: "Revenue Potential",
   },
 ];
-
 
 
 const plans = [
   {
-    name:"Starter",
-    price:"$499/mo",
-    description:"For growing roofing companies.",
+    name: "Starter",
+    price: "$499/mo",
+    description:
+      "For roofing companies looking to generate consistent opportunities.",
   },
   {
-    name:"Growth",
-    price:"$999/mo",
-    description:"For contractors scaling faster.",
+    name: "Growth",
+    price: "$999/mo",
+    description:
+      "For contractors scaling teams and increasing monthly revenue.",
   },
   {
-    name:"Domination",
-    price:"$1,999/mo",
-    description:"For roofing companies wanting market control.",
+    name: "Domination",
+    price: "$1,999/mo",
+    description:
+      "For companies wanting aggressive market expansion.",
   },
 ];
 
 
-
-export default function Home(){
-
+export default function Home() {
 
 return (
 
@@ -91,35 +87,31 @@ return (
 
 <section className="max-w-7xl mx-auto px-8 pt-24 pb-20">
 
-
 <div className="grid md:grid-cols-2 gap-12 items-center">
 
 
 <div>
 
-
-<p className="text-blue-400 font-semibold">
-Roofing Growth Platform
+<p className="text-blue-400 font-semibold uppercase tracking-wide">
+AI Roofing Growth Platform
 </p>
 
 
 <h1 className="text-5xl md:text-6xl font-bold mt-5 leading-tight">
 
-Book More Roofing Jobs.
+We Book Roofing Jobs
 <br />
 
-Close More Deals.
+While You Build.
 
 </h1>
 
 
 <p className="text-slate-400 text-lg mt-6">
 
-RoofFlow helps roofing contractors generate qualified leads,
-automate follow-ups, and turn more homeowners into customers.
+RoofFlow gives roofing contractors an AI-powered sales system that captures homeowners, follows up instantly, and turns opportunities into booked inspections.
 
 </p>
-
 
 
 <div className="flex gap-4 mt-8">
@@ -129,15 +121,15 @@ automate follow-ups, and turn more homeowners into customers.
 href="/apply"
 className="bg-blue-600 hover:bg-blue-700 px-6 py-3 rounded-lg font-semibold"
 >
-Get Started
+Get More Roofing Jobs
 </Link>
 
 
 <Link
-href="/dashboard"
+href="/pricing"
 className="border border-slate-700 px-6 py-3 rounded-lg"
 >
-Contractor Dashboard
+View Plans
 </Link>
 
 
@@ -148,30 +140,37 @@ Contractor Dashboard
 
 
 
+<div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-xl">
 
-<div className="bg-slate-900 border border-slate-800 rounded-2xl p-8">
 
+<div className="flex justify-between">
 
 <h3 className="text-2xl font-bold">
-RoofFlow AI Assistant
+RoofFlow AI Engine
 </h3>
+
+<span className="text-green-400">
+● Online
+</span>
+
+</div>
 
 
 <div className="mt-6 space-y-4">
 
 
 <div className="bg-slate-800 p-4 rounded-lg">
-🏠 New homeowner lead received
+🏠 Homeowner requested roof estimate
 </div>
 
 
 <div className="bg-slate-800 p-4 rounded-lg">
-🤖 AI qualified customer
+🤖 AI qualified project value: $14,500
 </div>
 
 
 <div className="bg-slate-800 p-4 rounded-lg">
-📅 Inspection booked
+📅 Inspection booked for tomorrow
 </div>
 
 
@@ -182,10 +181,8 @@ RoofFlow AI Assistant
 
 
 </div>
-
 
 </section>
-
 
 
 
@@ -193,7 +190,6 @@ RoofFlow AI Assistant
 {/* Stats */}
 
 <section className="max-w-7xl mx-auto px-8">
-
 
 <div className="grid md:grid-cols-4 gap-6">
 
@@ -205,7 +201,7 @@ key={item.label}
 className="bg-slate-900 border border-slate-800 rounded-xl p-6"
 >
 
-<h2 className="text-3xl font-bold">
+<h2 className="text-3xl font-bold text-blue-400">
 {item.value}
 </h2>
 
@@ -220,10 +216,7 @@ className="bg-slate-900 border border-slate-800 rounded-xl p-6"
 
 </div>
 
-
 </section>
-
-
 
 
 
@@ -235,15 +228,22 @@ className="bg-slate-900 border border-slate-800 rounded-xl p-6"
 
 
 <h2 className="text-4xl font-bold text-center">
-Everything Roofing Companies Need
+
+Everything Needed To Scale A Roofing Company
+
 </h2>
+
+
+<p className="text-center text-slate-400 mt-4">
+One platform for leads, automation, sales, and growth.
+</p>
+
 
 
 <div className="grid md:grid-cols-4 gap-6 mt-10">
 
 
 {features.map((feature)=>(
-
 
 <div
 key={feature.title}
@@ -268,7 +268,6 @@ className="bg-slate-900 border border-slate-800 rounded-xl p-6"
 
 </div>
 
-
 ))}
 
 
@@ -282,16 +281,14 @@ className="bg-slate-900 border border-slate-800 rounded-xl p-6"
 
 
 
-
 {/* Pricing */}
 
 <section className="max-w-7xl mx-auto px-8 pb-20">
 
 
 <h2 className="text-4xl font-bold text-center">
-Choose Your Growth Plan
+Plans Built For Roofing Growth
 </h2>
-
 
 
 <div className="grid md:grid-cols-3 gap-6 mt-10">
@@ -321,9 +318,12 @@ className="bg-slate-900 border border-slate-800 rounded-xl p-8"
 </p>
 
 
-<button className="mt-6 w-full bg-blue-600 hover:bg-blue-700 py-3 rounded-lg">
+<Link
+href="/apply"
+className="block text-center mt-6 bg-blue-600 hover:bg-blue-700 py-3 rounded-lg"
+>
 Start Growing
-</button>
+</Link>
 
 
 </div>
@@ -342,7 +342,6 @@ Start Growing
 
 
 
-
 {/* CTA */}
 
 <section className="max-w-7xl mx-auto px-8 pb-20">
@@ -352,12 +351,12 @@ Start Growing
 
 
 <h2 className="text-4xl font-bold">
-Ready to Fill Your Roofing Calendar?
+Stop Chasing Leads. Start Closing Jobs.
 </h2>
 
 
 <p className="mt-4 text-blue-100">
-Join contractors using RoofFlow to generate more opportunities.
+RoofFlow helps contractors create a predictable roofing sales machine.
 </p>
 
 
@@ -365,7 +364,7 @@ Join contractors using RoofFlow to generate more opportunities.
 href="/apply"
 className="inline-block mt-6 bg-white text-blue-600 px-8 py-3 rounded-lg font-bold"
 >
-Apply Now
+Apply For RoofFlow
 </Link>
 
 
@@ -373,7 +372,6 @@ Apply Now
 
 
 </section>
-
 
 
 </main>
